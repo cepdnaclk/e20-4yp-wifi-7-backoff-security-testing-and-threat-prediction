@@ -1,0 +1,16 @@
+[[4096-QAM Modulation]]
+[[Ultra-Wide Channels]]
+[[Multi-User OFDMA & MU-MIMO Enhancements]]
+[[Low Latency & High Reliability Features (Target Wake Time & QoS Enhancements)]]
+[[Preamble Puncturing or Flexible Channel Use]]
+[[Backward Compatibility]]
+[[High Throughput & Spectral Efficiency]]
+[[Summary Table]]
+[[Multi-AP Coordination]]
+[[EMLMR]]
+[[EMLSR]]
+[[Enhanced Distributed Channel Access]]
+[[Beamforming in wifi 7 and MLOs]]
+
+
+![[Pasted image 20251013134647.png]]

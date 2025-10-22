@@ -1,0 +1,4 @@
+**What it is:** an attacker repeatedly sends forged 802.11 deauthentication (or disassociation) management frames to a client or AP so the client is kicked off the network continuously.  
+**Impact:** denial of service for targeted clients, disruption of real-time apps (voice/meetings), can be used as part of other attacks (e.g., force reconnection to capture handshakes or steer clients to rogue APs).  
+**Indicators:** frequent disconnects for one or many clients, repeated association/deauth events in logs, spikes in retransmissions.  
+**Mitigation:** enable management frame protection (802.11w), use robust client/AP logging and intrusion detection, increase monitoring of sudden mass deauths, physical security and RF monitoring.

@@ -1,0 +1,4 @@
+**What it is:** the attacker forges or spoofs authentication/association frames to trick an AP into thinking a rogue client is legitimate (or floods the AP with forged auth requests). Sometimes used to exhaust AP resources or bypass MAC-based allowlists.  
+**Impact:** resource exhaustion on APs, bypass of weak MAC-filtering, groundwork for man-in-the-middle if combined with rogue APs.  
+**Indicators:** large numbers of auth/assoc attempts from spoofed MACs, AP logs showing repeated failed/odd association patterns.  
+**Mitigation:** avoid relying on MAC filtering for security, use strong WPA2/WPA3 authentication, rate-limit association attempts, monitor auth/assoc anomalies.

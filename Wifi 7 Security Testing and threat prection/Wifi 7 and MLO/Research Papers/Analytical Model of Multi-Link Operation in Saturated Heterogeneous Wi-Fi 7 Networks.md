@@ -1,0 +1,5 @@
+This paper introduces a mathematical model to analyze the performance of **Multi-Link Operation (MLO)** in the forthcoming **IEEE 802.11be (Wi-Fi 7)** standard. The key focus is on the **Non-Simultaneous Transmit and Receive (NSTR)** mode, which is designed for devices that experience interference between their different radios when transmitting and receiving at the same time.
+
+The study investigates a "saturated" network, where devices always have data to send, and a "heterogeneous" environment, meaning that new Wi-Fi 7 devices coexist with older, "legacy" devices.
+
+The main finding is that in such mixed networks, the opportunities for an NSTR device to transmit on multiple links simultaneously are very rare. This is because legacy devices, which operate on single channels, often keep one of the links busy, preventing the MLO device from coordinating a multi-link transmission. As a result, the throughput gains of NSTR MLO over traditional single-link devices are much lower than might be expected. The analytical model developed in the paper accurately predicts this behavior.

@@ -1,0 +1,2 @@
+
+A mobile device uploads data to a nearby offloading device (often over Wi-Fi). The offloader **stores** the data and **asynchronously** forwards it to the destination service over its broadband link. Users may disconnect after offloading. Offloaders typically maintain a **FIFO queue** and may **reject** new data when the cache is full. Each offloader serves **one user at a time** for Wi-Fi upload, while still forwarding cached data outward.
