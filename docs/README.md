@@ -1,7 +1,8 @@
+---
 layout: home
 permalink: index.html
 
-# Please update this with your repository name and title
+### Please update this with your repository name and title
 repository-name: e20-4yp-wifi7-dt-security
 title: Digital twins for Security testing and threat prediction for wifi 7 MLO operations
 ---
@@ -14,25 +15,24 @@ Digital twins for Security testing and threat prediction for wifi 7 MLO operatio
 ## Team Members
 
 * **Dissanayake P.D.**
-    * E/20/084
-    * Email: e20084@eng.pdn.ac.lk
+    * E/20/084
+    * Email: e20084@eng.pdn.ac.lk
 * **Nanayakkara A.T.L.**
-  T* E/20/262
-    * Email: e20262@eng.pdn.ac.lk
+    * E/20/262
+    * Email: e20262@eng.pdn.ac.lk
 * **Nilupul D.R.P.**
-    * E/20/266
-    * Email: e20266@eng.pdn.ac.lk
+    * E/20/266
+    * Email: e20266@eng.pdn.ac.lk
+
 
 #### Supervisors
 
 ## Supervisor
-
 * **Dr. Upul Jayasinghe**
-    * Email: upuljm@eng.pdn.ac.lk
+    * Email: upuljm@eng.pdn.ac.lk
+ 
 * **Dr. Suneth Namal**
-    * Email: namal@eng.pdn.ac.lk
-
-
+    * Email: namal@eng.pdn.ac.lk
 
 #### Table of content
 
