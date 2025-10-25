@@ -13,7 +13,7 @@ title: Digital twins for Security testing and threat prediction for wifi 7 MLO o
 
 #### Team
 
-- E/20/084, Dissanayake P.D., (mailto:e20084@eng.pdn.ac.lk)
+- E/20/084, Dissanayake P.D.,[email](mailto:e20084@eng.pdn.ac.lk)
 - eNumber, Name, [email](mailto:name@email.com)
 - eNumber, Name, [email](mailto:name@email.com)
 
