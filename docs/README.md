@@ -3,8 +3,8 @@ layout: home
 permalink: index.html
 
 # Please update this with your repository name and title
-repository-name: eYY-4yp-project-template
-title:
+repository-name: e20-4yp-project-template
+title: Digital twins for Security testing and threat prediction for wifi 7 MLO operations
 ---
 
 [comment]: # "This is the standard layout for the project, but you can clean this and use your own template"
@@ -13,7 +13,7 @@ title:
 
 #### Team
 
-- eNumber, Name, [email](mailto:name@email.com)
+- E/20/084, Dissanayake P.D.,[email](mailto:e20084@eng.pdn.ac.lk)
 - eNumber, Name, [email](mailto:name@email.com)
 - eNumber, Name, [email](mailto:name@email.com)
 
