@@ -39,3 +39,8 @@ If a Wi-Fi 7 phone supports MLO, it could connect to a router on both **5 GHz** 
 [[Advantages of MLO]]
 [[Multi-Link Congestion-Aware Load Balancing]]
 [[multi-link aggregation in the unlicensed spectrum]]
+[[Synchronous Multi-Radio Multi-Link MAC Protocols]]
+[[ESCA Variant (Enhanced Spatial Channel Access)]]
+[[Uplink Delay]]
+[[Increased Overhead from Acquiring Channel State Information (CSI)]]
+[[Delay Violation Probability (DVP)]]

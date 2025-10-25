@@ -19,4 +19,5 @@
 19. [[Time-Sensitive Networking in IEEE]]
 20. [[Wi-Fi 7 Strikes Back]]
 21. [[wi-fi-7-in-depth-your-guide-to-mastering-wi-fi-7-the-80211be-protocol-and-their-deployment-1nbsped]]
+22. [[Multi-Link Operation and Wireless Digital Twin to Support Enhanced Roaming in Next-Gen Wi-Fi]]
 
