@@ -1,0 +1,1 @@
+![[High level Architecture of proposed digital twin.png]]

@@ -10,4 +10,3 @@
 10. Packet Allocation Exploitation [[Early steering and late steering and combined steering]]
 11. HARQ Vulnerability Accessing [[High-level HARQ vulnerability categories (non-actionable)]]
 12. beam hijacking or spoofed CSI feedback[[beam hijacking or spoofed CSI feedback]]
-13. 
