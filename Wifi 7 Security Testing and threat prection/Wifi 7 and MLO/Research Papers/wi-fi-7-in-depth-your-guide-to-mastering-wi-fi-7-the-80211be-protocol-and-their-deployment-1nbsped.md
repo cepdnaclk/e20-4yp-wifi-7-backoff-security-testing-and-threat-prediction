@@ -12,19 +12,19 @@ The book's main focus is on the groundbreaking MAC features, especially **Multi-
     
 - **Builds on Wi-Fi 6:** It explains how Wi-Fi 7 evolves features from Wi-Fi 6, such as OFDMA, TWT (Target Wake Time), and BSS Coloring.
     
-- **PHY Enhancements:[[PHY and MAC amendments]]**  It details the new physical layer features responsible for the raw speed increase:
+- **PHY Enhancements:** It details the new physical layer features responsible for the raw speed increase:
     
-    - **320 MHz Channels:**  [[Ultra-Wide Channels]] Doubling the maximum channel width of Wi-Fi 6.
+    - **320 MHz Channels:** Doubling the maximum channel width of Wi-Fi 6.
         
-    - **4096-QAM [[4096-QAM Modulation]] :** A more complex modulation that packs more data into the signal.
+    - **4096-QAM:** A more complex modulation that packs more data into the signal.
         
 - **MLO Deep Dive:** The book dedicates significant time to MLO, covering:
     
-    - MLO Architecture  [[MLO Architecture]] (how MLDs are built).
+    - MLO Architecture (how MLDs are built).
         
     - MLD Discovery and Association (how they connect).
         
-    - The **five possible MLO modes**  [[five possible MLO modes]](which dramatically affect performance).
+    - The **five possible MLO modes** (which dramatically affect performance).
         
     - ML Reconfiguration and Link Management.
         
@@ -45,8 +45,8 @@ The book's main focus is on the groundbreaking MAC features, especially **Multi-
     
 - **MLO Modes:** The book details the different MLO operating modes, which include **MLSR (Multi-Link Single Radio)**, **eMLSR (Enhanced MLSR)**, and **MLMR (Multi-Link Multi-Radio)**, and their security/performance trade-offs.
     
-- **Puncturing [[Puncturing]] (or Preamble Puncturing):** A crucial feature that allows a Wi-Fi 7 AP to "puncture" (block off) a 20 or 40 MHz section of its wide 160 or 320 MHz channel if it detects interference. This allows it to use the remaining "clean" parts of the channel instead of falling back to a much narrower channel, thus improving efficiency.
+- **Puncturing (or Preamble Puncturing):** A crucial feature that allows a Wi-Fi 7 AP to "puncture" (block off) a 20 or 40 MHz section of its wide 160 or 320 MHz channel if it detects interference. This allows it to use the remaining "clean" parts of the channel instead of falling back to a much narrower channel, thus improving efficiency.
     
-- **Multi-AP Coordination [[Multi-AP Coordination]] [[APC]](MAPC):** A set of features where multiple APs coordinate their transmissions to reduce interference and improve performance (a topic for Wi-Fi 7 and 8).
+- **Multi-AP Coordination (MAPC):** A set of features where multiple APs coordinate their transmissions to reduce interference and improve performance (a topic for Wi-Fi 7 and 8).
     
 - **Wi-Fi 8 (IEEE 802.11bn):** The _next_ generation after Wi-Fi 7, which is already in the early planning stages.

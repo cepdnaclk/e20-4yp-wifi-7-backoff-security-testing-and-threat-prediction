@@ -20,5 +20,4 @@
 20. [[Wi-Fi 7 Strikes Back]]
 21. [[wi-fi-7-in-depth-your-guide-to-mastering-wi-fi-7-the-80211be-protocol-and-their-deployment-1nbsped]]
 22. [[FYP-wifi-7-security-testing-and-threat-prediction/Wifi 7 Security Testing and threat prection/Wifi 7 and MLO/Research Papers/Multi-Link Operation and Wireless Digital Twin to Support Enhanced Roaming in Next-Gen Wi-Fi]]
-23. 
 

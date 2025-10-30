@@ -10,9 +10,9 @@ This paper discusses packet steering mechanisms in Wi-Fi 7's Multi-Link Operatio
 #### Important Points
 
 - Wi-Fi 7 focuses on extremely high throughput and deterministic behavior (shorter latency, smaller jitter) via MLO.
-- MLO [[MLO]] involves Multi-Link Devices (MLDs) with affiliated STAs (L-MACs) on different channels (e.g., 2.4, 5, 6 GHz) managed by a U-MAC for packet steering.
-- Packet steering [[Packet Steering]] decides which L-MAC and Access Category (AC) to use, considering QoS, channel capabilities, and state (e.g., wider bandwidth in 5/6 GHz for multimedia).
-- EDCA [[Enhanced Distributed Channel Access]] parameters (CW, AIFS, TXOP) per AC impact QoS.
+- MLO involves Multi-Link Devices (MLDs) with affiliated STAs (L-MACs) on different channels (e.g., 2.4, 5, 6 GHz) managed by a U-MAC for packet steering.
+- Packet steering decides which L-MAC and Access Category (AC) to use, considering QoS, channel capabilities, and state (e.g., wider bandwidth in 5/6 GHz for multimedia).
+- EDCA parameters (CW, AIFS, TXOP) per AC impact QoS.
 - Reference architecture based on Atheros AR9344 (Wi-Fi 4/5 compatible) includes QCU and DCU for transmission.
 - Proposes dynamic steering: simple for chipset implementation, flexible, host-driven per packet.
 - Early vs. late packet steering concepts illustrated.
@@ -27,4 +27,4 @@ This paper discusses packet steering mechanisms in Wi-Fi 7's Multi-Link Operatio
 - **Packet Steering**: Process of selecting which link (L-MAC) to use for transmitting a packet based on QoS and channel state.
 - **Enhanced Distributed Channel Access (EDCA)**: QoS mechanism with per-AC parameters like CW (Contention Window), AIFS (Arbitration Inter-Frame Spacing), TXOP (Transmission Opportunity).
 - **Early/Late Packet Steering**: Conceptual architectures for MLO (early: before TXOP; late: during TXOP).
-- **QCU [[QUC (QoS Unit Control)]] (Queue Control Unit)** and **DCU (Distributed Coordination Unit)**: Components in Wi-Fi controller architecture for transmission handling.
+- **QCU (Queue Control Unit)** and **DCU (Distributed Coordination Unit)**: Components in Wi-Fi controller architecture for transmission handling.

@@ -11,8 +11,8 @@ This paper analyzes synchronous multi-radio multi-link MAC protocols in IEEE 802
 
 - IEEE 802.11be targets max throughput >30 Gbps and improved latency.
 - Multi-link operation enables simultaneous use of multiple links for EHT.
-- DCF [[Distributed Coordination Function (DCF)]] (CSMA/CA with binary exponential backoff) must adapt for multi-link.
-- Analyzes synchronous multi-radio multi-link MAC protocols using Markov chain.[[Markov Chain]] 
+- DCF (CSMA/CA with binary exponential backoff) must adapt for multi-link.
+- Analyzes synchronous multi-radio multi-link MAC protocols using Markov chain.
 - Summarizes pros/cons of protocols and key findings.
 - Wi-Fi 7's release framework impacts technology and market.
 - Throughput analysis based on simple Markov chain for DCF.
@@ -22,8 +22,8 @@ This paper analyzes synchronous multi-radio multi-link MAC protocols in IEEE 802
 - **Extremely High Throughput (EHT)**: Wi-Fi 7's focus on high throughput and low latency.
 - **Multi-Link Operation**: Allows devices to use multiple links simultaneously in 802.11be.
 - **Distributed Coordination Function (DCF)**: Core MAC mechanism using CSMA/CA and backoff.
-- **Synchronous Multi-Radio Multi-Link MAC Protocols**: [[Synchronous Multi-Radio Multi-Link MAC Protocols]] Protocols ensuring synchronized access across multiple radios/links.
+- **Synchronous Multi-Radio Multi-Link MAC Protocols**: Protocols ensuring synchronized access across multiple radios/links.
 - **Markov Chain Model**: Analytical tool used to model and evaluate DCF performance in multi-link scenarios.
-- **Task Group-be [[Task Group-be]](TGbe)**: IEEE group for 802.11be development.
+- **Task Group-be (TGbe)**: IEEE group for 802.11be development.
 
 ---

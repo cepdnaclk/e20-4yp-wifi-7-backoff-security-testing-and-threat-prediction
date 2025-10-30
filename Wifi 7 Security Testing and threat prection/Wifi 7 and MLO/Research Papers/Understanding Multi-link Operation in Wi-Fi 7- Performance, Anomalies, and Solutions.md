@@ -5,22 +5,22 @@ This paper examines the performance of **Multi-Link Operation (MLO)** in Wi-Fi 7
 
 #### **New Terminologies**
 
-- **STR EMLMR [[EMLMR]](Simultaneous Transmit and Receive Enhanced Multi-link Multi-radio):** This is the most advanced and flexible type of MLO, where a device has multiple radios and can transmit and receive at the same time on different links.
+- **STR EMLMR (Simultaneous Transmit and Receive Enhanced Multi-link Multi-radio):** This is the most advanced and flexible type of MLO, where a device has multiple radios and can transmit and receive at the same time on different links.
     
 - **EMLSR[[EMLSR]] (Enhanced Multi-link Single-radio):** A less complex MLO where a device has one main radio but can listen on multiple channels.
     
 - **NSTR EMLMR [[EMLMR]](Non-simultaneous Transmit and Receive EMLMR):** MLO with multiple radios, but the device can't send and receive at the exact same time to prevent interference.
     
-- **BSS [[BSS (Basic Service Set)]] (Basic Service Set):** A group of connected devices in a Wi-Fi network.
+- **BSS (Basic Service Set):** A group of connected devices in a Wi-Fi network.
     
 - **Delay Anomaly:** When using MLO in a busy network actually makes latency worse instead of better.
     
 
 #### **Technology Explanations**
 
-- **Packet Delay in MLO:** [[Packet Delay in MLO]]When a network is not busy, MLO lowers delay by sending data in parallel on multiple channels. But when the network is congested, devices using MLO can end up waiting for each other to finish using different channels. For example, a device might be ready to send on one channel but has to wait for a second channel to be free, which can cause delays. If many devices are doing this, they can "starve" each other of bandwidth.
+- **Packet Delay in MLO:** When a network is not busy, MLO lowers delay by sending data in parallel on multiple channels. But when the network is congested, devices using MLO can end up waiting for each other to finish using different channels. For example, a device might be ready to send on one channel but has to wait for a second channel to be free, which can cause delays. If many devices are doing this, they can "starve" each other of bandwidth.
     
-- **Channel Allocation Strategy:** [[Channel Allocation Strategy]] The paper argues that to avoid these delay problems, you need a "clever channel assignment." How you assign channels to different MLDs is very important, especially in crowded areas. To get consistently low latency, a Wi-Fi 7 network might need more available channels than there are competing networks, plus a smart system for allocating them.
+- **Channel Allocation Strategy:** The paper argues that to avoid these delay problems, you need a "clever channel assignment." How you assign channels to different MLDs is very important, especially in crowded areas. To get consistently low latency, a Wi-Fi 7 network might need more available channels than there are competing networks, plus a smart system for allocating them.
     
 
 Sources

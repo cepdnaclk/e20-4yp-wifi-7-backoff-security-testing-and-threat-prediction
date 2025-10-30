@@ -28,5 +28,3 @@ The physical (PHY) layer is a major focus of Wi-Fi 7, with several key enhanceme
 [[Convensional Wideband Operation]]
 
 [[network topology optimization using unimodular bipartite graph in wifi 7]]
-
-[[4096-QAM Modulation]]

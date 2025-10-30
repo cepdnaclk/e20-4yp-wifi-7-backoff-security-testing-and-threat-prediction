@@ -21,12 +21,10 @@ This paper evaluates Multi-Link Operation (MLO) in Wi-Fi 7 for XR (Extended Real
 
 #### New Terms and Technologies
 
-- **Multi-Link Operation (MLO)**: [[MLO]] Wi-Fi 7 feature for multi-band/channel connections via single association.
+- **Multi-Link Operation (MLO)**: Wi-Fi 7 feature for multi-band/channel connections via single association.
 - **Extended Reality (XR)**: Includes VR/AR/MR with strict requirements (throughput >100 Mbps, delay <10 ms).
-- **Listen Before Talk (LBT)**: [[Listen Before Talk (LBT)]] Wi-Fi's unlicensed spectrum access method causing contention.
-- **Quality of Experience (QoE)**: [[Quality of Experience (QoE)]] User-perceived quality in XR (e.g., no lag/dizziness).
-- **Single-Link Operation (SLO)**: [[Single-Link Operation]] Legacy Wi-Fi using one link.
-- **OFDMA [[Multi-User OFDMA & MU-MIMO Enhancements]](Orthogonal Frequency Division Multiple Access)**: Wi-Fi 6+ feature for multi-user access, but may degrade XR.
+- **Listen Before Talk (LBT)**: Wi-Fi's unlicensed spectrum access method causing contention.
+- **Quality of Experience (QoE)**: User-perceived quality in XR (e.g., no lag/dizziness).
+- **Single-Link Operation (SLO)**: Legacy Wi-Fi using one link.
+- **OFDMA (Orthogonal Frequency Division Multiple Access)**: Wi-Fi 6+ feature for multi-user access, but may degrade XR.
 - **Received Signal Strength Indicator (RSSI)**: Signal quality metric impacting XR performance.
-[[QUC (QoS Unit Control)]]
-

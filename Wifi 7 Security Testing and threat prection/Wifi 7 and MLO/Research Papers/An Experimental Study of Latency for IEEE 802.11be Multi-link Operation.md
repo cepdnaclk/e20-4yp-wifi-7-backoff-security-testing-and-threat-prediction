@@ -9,6 +9,3 @@ The study reveals two key findings:
     
 
 To address this problem, the authors propose a new channel access method called **MLO-STR+**. In this mode, the device runs the channel access competition (backoff procedure) on all links in parallel and sends the packet on whichever link becomes available first. This approach guarantees that the latency will always be at least as good as, or better than, single-link operation.
-
-[[STR and Non STR]]
-[[STR MLMR]]

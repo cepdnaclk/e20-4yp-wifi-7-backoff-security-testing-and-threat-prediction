@@ -26,7 +26,7 @@
     
     - **New Technologies:** The core technology discussed is the application of advanced ML and deep learning models to network traffic for intrusion detection.
         
-    - **Relevance to Wi-Fi 7:** This paper is highly relevant to **threat prediction**. Wi-Fi 7's new features (Multi-Link Operation, 320 MHz channels, 4K-QAM) create a new, more complex attack surface, just as IIoT did for critical infrastructure.[[4096-QAM Modulation]]
+    - **Relevance to Wi-Fi 7:** This paper is highly relevant to **threat prediction**. Wi-Fi 7's new features (Multi-Link Operation, 320 MHz channels, 4K-QAM) create a new, more complex attack surface, just as IIoT did for critical infrastructure.
         
     - **For Security Testing:** This suggests that Wi-Fi 7 security testing should not just look for known vulnerabilities but must also include **anomaly-based threat detection**.
         

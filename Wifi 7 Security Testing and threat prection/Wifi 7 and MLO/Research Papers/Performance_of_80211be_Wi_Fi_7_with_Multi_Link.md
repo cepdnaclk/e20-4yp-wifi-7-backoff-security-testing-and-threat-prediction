@@ -11,9 +11,9 @@ This paper evaluates Wi-Fi 7 (IEEE 802.11be) performance, focusing on Multi-Link
 
 - Wi-Fi 7 aims for Extremely High Throughput (EHT) to support low-latency apps like AR.
 - MLO allows simultaneous data transfer on multiple links for higher throughput, lower latency, and reliability.
-- Traffic-to-link allocation [[Traffic-to-link allocation]]policies are key; evaluated ones include least-congested link, uniform load balancing, and congestion-aware.
-- Congestion-aware policies [[Congestion-aware policies]]adapt better; least-congested allocation simplifies and reduces traffic exposure.
-- Dynamic policies [[Dynamic policies]](periodic updates) vs. non-dynamic (only on flow arrival).
+- Traffic-to-link allocation policies are key; evaluated ones include least-congested link, uniform load balancing, and congestion-aware.
+- Congestion-aware policies adapt better; least-congested allocation simplifies and reduces traffic exposure.
+- Dynamic policies (periodic updates) vs. non-dynamic (only on flow arrival).
 - Increasing links (e.g., 3 vs. 1) reduces 90th percentile latency by 93%; diminishing returns beyond 3 links.
 - MLO outperforms SL in AR scenarios with same resources.
 - Policies can degrade due to channel blocking.

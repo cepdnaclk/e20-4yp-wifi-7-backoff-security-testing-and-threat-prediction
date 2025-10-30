@@ -10,8 +10,8 @@ This paper examines Multi-Link Operation (MLO) with Enhanced Synchronous Channel
 #### Important Points
 
 - MLO in Wi-Fi 7 targets 30 Gbps throughput and low latency for gaming/VR.
-- ESCA variants [[ESCA Variant (Enhanced Spatial Channel Access)]] cause coexistence issues (e.g., MLO devices dominate legacy).
-- Proposes penalties: repick backoff[[Backoff in Wi-Fi]] , double CW[[Contention Window]] , switch CW set, compensate backoff [[Backoff Compensation]] .
+- ESCA variants cause coexistence issues (e.g., MLO devices dominate legacy).
+- Proposes penalties: repick backoff, double CW, switch CW set, compensate backoff.
 - Five solutions from combinations; compensating backoff best for coexistence with marginal MLO throughput loss.
 - Simulations: dense single-spot/indoor; MLO gains vary; STR capability impacts coexistence.
 - Metric for throughput/latency gains + coexistence in one value.
@@ -20,9 +20,9 @@ This paper examines Multi-Link Operation (MLO) with Enhanced Synchronous Channel
 #### New Terms and Technologies
 
 - **Extremely High Throughput (EHT)**: Wi-Fi 7's high-throughput/low-latency goal.
-- **Multi-Link Operation (MLO)**: [[MLO]] Uses multiple links for simultaneous Tx/Rx.
+- **Multi-Link Operation (MLO)**: Uses multiple links for simultaneous Tx/Rx.
 - **Enhanced Synchronous Channel Access (ESCA)**: Synchronous MLO variant for coordinated access.
-- **Asynchronous/Synchronous Channel Access**: [[Sync vs. Async Operation]] Async: independent links; Sync: coordinated to avoid issues.
-- **Coexistence Challenge**: [[Coexistence Challenge]] MLO devices unfairly accessing medium vs. legacy.
-- **Backoff Penalties**: [[Backoff Penalties]]Mechanisms like repicking count, doubling CW (Contention Window) for fairness.
+- **Asynchronous/Synchronous Channel Access**: Async: independent links; Sync: coordinated to avoid issues.
+- **Coexistence Challenge**: MLO devices unfairly accessing medium vs. legacy.
+- **Backoff Penalties**: Mechanisms like repicking count, doubling CW (Contention Window) for fairness.
 - **Simultaneous Transmission and Reception (STR)**: MLO capability for concurrent Tx/Rx on links.
