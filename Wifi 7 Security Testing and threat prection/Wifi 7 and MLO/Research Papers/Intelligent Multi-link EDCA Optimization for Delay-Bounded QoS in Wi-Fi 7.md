@@ -38,4 +38,5 @@ This creates a highly adaptive system that can meet strict "delay-bounded" requi
     
 - **Genetic Algorithm (GA):** A type of AI optimization algorithm inspired by natural selection. It "evolves" a solution by testing many configurations, "breeding" the best ones, and "mutating" them to find an optimal result.
     
-- **AC-to-Link Allocation:** The _strategy_ for assigning specific QoS traffic types (Access Categories) to specific physical radio links.
+- **AC-to-Link Allocation:** The _strategy_ for assigning specific QoS traffic types (Access Categories) to specific physical radio links.[[Qos in MLOs and Wifi 7]] [[AC to channel Allocation]]
+- 

@@ -27,7 +27,7 @@ A **centralized architecture** where:
 
 - Multiple MLO-enabled APs connect to a **wired Ethernet network**.
     
-- The **WiTwin controller** continuously collects data from **stations (STAs)** and **APs**.
+- The **WiTwin [[WiTwin]] controller** continuously collects data from **stations (STAs)** and **APs**.
     
 - It builds a **spatial digital twin model (WiTwinModel)** that represents the real-time wireless environment.
     
@@ -63,7 +63,7 @@ A **centralized architecture** where:
     
     - Custom-defined messages
         
-    - IEEE 802.11k protocol messages
+    - IEEE 802.11k [[IEEE 802.11k]] protocol messages
         
 - Localization supported via **IEEE 802.11az** or other methods.
     
@@ -90,9 +90,9 @@ A **centralized architecture** where:
         
 - **Metrics used:**
     
-    - Traditionally: RSSI
+    - Traditionally: RSSI[[Received Signal Strength Indicator (RSSI)]]
         
-    - Proposed: FDR (Frame Delivery Ratio) — more meaningful for latency and reliability.
+    - Proposed: FDR (Frame Delivery Ratio) [[FDR-Based Optimization (Frame Delivery Ratio)]] — more meaningful for latency and reliability.
         
 
 ---

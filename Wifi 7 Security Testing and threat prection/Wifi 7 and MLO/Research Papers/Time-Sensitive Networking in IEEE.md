@@ -12,13 +12,13 @@ This article argues that the next generation of Wi-Fi, IEEE 802.11be (Wi-Fi 7), 
     
 - **Wi-Fi 7 as the Enabler:** The paper states that key Wi-Fi 7 features are the building blocks that make wireless TSN possible. These features are:
     
-    1. **Multi-Link Operation (MLO):** Allows a device to use multiple links in different bands (2.4, 5, 6 GHz) simultaneously. This is the **most critical feature** for reliability. If one link is congested or experiences interference, latency-sensitive traffic can be instantly moved to another, clearer link.
+    1. **Multi-Link Operation (MLO):** [[MLO]]Allows a device to use multiple links in different bands (2.4, 5, 6 GHz) simultaneously. This is the **most critical feature** for reliability. If one link is congested or experiences interference, latency-sensitive traffic can be instantly moved to another, clearer link.
         
-    2. **320 MHz Channels:** Wider channels for extremely high throughput (EHT).
+    2. **320 MHz Channels:** [[Ultra-Wide Channels]]Wider channels for extremely high throughput (EHT).
         
-    3. **4096-QAM:** Higher-order modulation for more data per signal.
+    3. **4096-QAM:** Higher-order modulation for more data per signal.[[4096-QAM Modulation]]
         
-    4. **Multi-AP Coordination:** Multiple Access Points coordinate to reduce interference and improve efficiency, especially at the cell edge.
+    4. **Multi-AP Coordination:** [[Multi-AP Coordination]]Multiple Access Points coordinate to reduce interference and improve efficiency, especially at the cell edge.
         
 - **Use Cases:** The paper explicitly links these new capabilities to specific IoT scenarios:
     
@@ -35,7 +35,7 @@ This article argues that the next generation of Wi-Fi, IEEE 802.11be (Wi-Fi 7), 
 
 - **IEEE 802.11be (Wi-Fi 7):** The upcoming Wi-Fi standard, also known as Extremely High Throughput (EHT).
     
-- **Time-Sensitive Networking (TSN):** A set of IEEE 802.1 standards to make Ethernet deterministic. This paper is about applying its _principles_ to Wi-Fi.
+- **Time-Sensitive Networking (TSN):** [[Time-Sensitive Networking (TSN)]] A set of IEEE 802.1 standards to make Ethernet deterministic. This paper is about applying its _principles_ to Wi-Fi.
     
 - **Ultra-Reliability:** A new design goal for Wi-Fi, meaning the network must deliver data consistently with very low packet loss.
     

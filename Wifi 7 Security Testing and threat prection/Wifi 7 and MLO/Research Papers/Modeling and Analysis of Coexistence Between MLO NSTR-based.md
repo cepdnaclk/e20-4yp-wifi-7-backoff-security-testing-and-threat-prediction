@@ -20,11 +20,11 @@ This paper models coexistence between Wi-Fi 7's MLO (Non-STR based) and legacy W
 
 #### New Terms and Technologies
 
-- **Multi-Link Operation (MLO)**: Wi-Fi 7's multi-link Tx/Rx for enhanced performance.
+- **Multi-Link Operation (MLO)**: [[MLO]]Wi-Fi 7's multi-link Tx/Rx for enhanced performance.
 - **Multi-Link Device (MLD)**: Device with affiliated STAs sharing upper MAC.
-- **Non-STR (NSTR)**: Non-simultaneous Tx/Rx mode for non-AP MLDs to avoid IDC.
-- **In-Device Coexistence (IDC) Interference**: Self-interference in MLDs from proximate transceivers.
+- **Non-STR (NSTR)**: [[STR and Non STR]]Non-simultaneous Tx/Rx mode for non-AP MLDs to avoid IDC.
+- **In-Device Coexistence (IDC) [[In-Device Coexistence (IDC)]] Interference**: Self-interference in MLDs from proximate transceivers.
 - **Single-Link Device (SLD)/Operation (SLO)**: Legacy Wi-Fi using one link.
-- **Markov Chains (MC)**: Models for MLO backoff/transmit probabilities.
-- **EDCA (Enhanced Distributed Channel Access)**: QoS-based access in Wi-Fi.
+- **Markov Chains (MC)**: [[Markov Chain]]cModels for MLO backoff/transmit probabilities.
+- **EDCA [[Enhanced Distributed Channel Access]] (Enhanced Distributed Channel Access)**: QoS-based access in Wi-Fi.
 - **ns-3 Simulator**: Tool extended for STR/NSTR MLO validation.

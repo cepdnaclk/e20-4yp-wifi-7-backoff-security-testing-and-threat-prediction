@@ -8,14 +8,20 @@ This paper is a general overview of **Wi-Fi 7 (IEEE 802.11be)**. It starts with 
     
 - **MIMO (Multiple-Input Multiple-Output):** A technology using multiple antennas to send and receive more data at once. First introduced in 802.11n (Wi-Fi 4).
     
-- **OFDMA (Orthogonal Frequency-Division Multiple Access):** A technology that lets a Wi-Fi access point talk to many devices at the same time by splitting a channel into smaller pieces.
+- **OFDMA [[Multi-User OFDMA & MU-MIMO Enhancements]](Orthogonal Frequency-Division Multiple Access):** A technology that lets a Wi-Fi access point talk to many devices at the same time by splitting a channel into smaller pieces.
     
 
 #### **Technology Explanations**
 
-- **Multi-Link Operation (MLO):** As in the first paper, this allows devices to use the 2.4 GHz, 5 GHz, and 6 GHz bands simultaneously to increase speed and reliability.
+- **Multi-Link Operation (MLO):** [[MLO]]As in the first paper, this allows devices to use the 2.4 GHz, 5 GHz, and 6 GHz bands simultaneously to increase speed and reliability.
     
 - **320 MHz Channels:** Wi-Fi 7 doubles the maximum channel width to 320 MHz, which can double the data speed compared to Wi-Fi 6.
     
 - **Preamble Puncturing:** This lets a Wi-Fi 7 device use only a part of a channel if another part is busy. This makes the Wi-Fi network much more efficient.
-    
+
+[[Puncturing]]
+[[4096-QAM Modulation]]
+[[MLO]]
+[[Ultra-Wide Channels]]
+
+

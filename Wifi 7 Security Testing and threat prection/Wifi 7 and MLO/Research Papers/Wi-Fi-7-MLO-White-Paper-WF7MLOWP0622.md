@@ -69,3 +69,11 @@ This paper details several new mechanisms that are critical for building a threa
     - Arch#4 is a "distributed" solution that requires an **inter-chip bus** to connect different MACs. The performance of this architecture is bounded by the speed of this bus.
         
     - **Threat Implication:** These different architectures present different attack surfaces. A distributed solution (Arch#4) might be vulnerable to side-channel or fault-injection attacks on the physical "inter-chip bus", while a single-MAC (Arch#1) might have a single software point of failure. An attacker who can fingerprint the underlying architecture could tailor an exploit.
+    
+    
+    
+    
+[[STR MLMR]]
+[[STR and Non STR]]
+[[EMLSR]]
+[[EMLMR]]

@@ -1,0 +1,7 @@
+## Proportional Fairness
+
+- **What it is:** A popular scheduling algorithm used in wireless networks to decide who gets to transmit next. It's a compromise between two extremes: 1) maximizing _total throughput_ (which would mean letting the user with the strongest signal transmit 100% of the time) and 2) _equal fairness_ (which would mean giving every user an equal slice of time, even if one user is very slow and drags the whole network down).
+    
+- **How it works:** It tries to give each user a share of the airtime (or Resource Units) that is _proportional_ to their _potential_ data rate. In simple terms, it prioritizes users who currently have a good, efficient connection _but_ haven't transmitted in a while. This ensures that slow, "starving" users get a turn without letting them dominate and waste airtime, while also preventing a single strong user from hogging all the resources.
+    
+- **Security Relevance:** The scheduler's logic can be exploited. A **threat prediction** is a **"scheduler poisoning" attack**. An attacker can send spoofed channel quality reports (CQI) to the AP, tricking the scheduler into thinking the attacker has a very good (or very bad) connection. By doing this, the attacker can "game" the proportional fairness algorithm to either _steal_ a disproportionately large share of the resources or _deny_ resources to a specific victim by making them seem like an inefficient choice for the scheduler.

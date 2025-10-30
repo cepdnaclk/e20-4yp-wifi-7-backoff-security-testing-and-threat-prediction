@@ -11,6 +11,6 @@
 [[EMLSR]]
 [[Enhanced Distributed Channel Access]]
 [[Beamforming in wifi 7 and MLOs]]
-
+[[Wifi generations]]
 
 ![[Pasted image 20251013134647.png]]
