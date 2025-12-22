@@ -43,6 +43,7 @@ ns3-run-example:
 	@docker run --rm -it \
 	  --user "$$(id -u):$$(id -g)" \
 	  -v "$(PWD)":/work \
-	  ndt/ns3:local \
+	  $(NS3_IMAGE) \
 	  bash -lc "./sim/ns3/scenario/run_wifi_example_and_export.sh $(EXP_ID) 42"
+
 
