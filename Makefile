@@ -1,13 +1,19 @@
-.PHONY: up down status run-baseline
+.PHONY: up down status logs
+
+CLAB_TOPO=clab/topo.yml
 
 up:
-	@echo "TODO: bring up containerlab + services"
+	@containerlab deploy -t $(CLAB_TOPO)
 
 down:
-	@echo "TODO: tear down containerlab + services"
+	@containerlab destroy -t $(CLAB_TOPO) --cleanup
 
 status:
-	@echo "TODO: show running services and ports"
+	@containerlab inspect -t $(CLAB_TOPO)
+
+logs:
+	@echo "Use: docker logs -f <container_name>"
+	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 run-baseline:
 	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make run-baseline EXP_ID=20251222-2100-baseline-42" && exit 1)
