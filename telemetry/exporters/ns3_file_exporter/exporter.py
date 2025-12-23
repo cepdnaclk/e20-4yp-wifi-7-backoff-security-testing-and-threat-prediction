@@ -1,3 +1,4 @@
+# telemetry/exporters/ns3_file_exporter/exporter.py
 import json
 import os
 import time
@@ -44,15 +45,25 @@ def normalize_ts(ts: Any) -> str:
 def load_state() -> Dict[str, Any]:
     try:
         with open(STATE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            if isinstance(data, dict) and "files" in data and isinstance(data["files"], dict):
+                return data
+            return {"files": {}}
     except FileNotFoundError:
-        return {"offset": 0}
+        return {"files": {}}
 
 
-def save_state(offset: int) -> None:
+def get_offset(state: Dict[str, Any], path: str) -> int:
+    return int(state.get("files", {}).get(path, 0))
+
+
+def save_offset(state: Dict[str, Any], path: str, offset: int) -> None:
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+    state.setdefault("files", {})
+    state["files"][path] = offset
     with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump({"offset": offset}, f)
+        json.dump(state, f)
+
 
 
 def delivery_report(err, msg):
@@ -66,7 +77,7 @@ def main():
 
     producer = Producer({"bootstrap.servers": BROKERS})
     state = load_state()
-    offset = int(state.get("offset", 0))
+    offset = get_offset(state, TELEMETRY_FILE)
 
     print(f"[exporter] brokers={BROKERS} topic={TOPIC}")
     print(f"[exporter] file={TELEMETRY_FILE} resume_offset={offset}")
@@ -109,7 +120,7 @@ def main():
                     producer.poll(0)
 
                     # persist state after successful enqueue
-                    save_state(offset)
+                    save_offset(state, TELEMETRY_FILE, offset)
 
                 except (json.JSONDecodeError, ValidationError) as e:
                     print(f"[exporter] invalid line skipped: {e}")
