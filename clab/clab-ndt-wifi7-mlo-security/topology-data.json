@@ -1,0 +1,174 @@
+{
+  "name": "ndt-wifi7-mlo-security",
+  "type": "clab",
+  "clab": {
+    "config": {
+      "prefix": "clab",
+      "mgmt": {
+        "network": "clab-mgmt",
+        "bridge": "br-f95d1c12f7d1",
+        "ipv4-subnet": "172.20.20.0/24",
+        "ipv4-gw": "172.20.20.1",
+        "external-access": true
+      }
+    }
+  },
+  "ssh-pub-keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHJfKrd+c869C2gGgbWa9IWwObtkpHmHyIpN/9MUjjFi"],
+  "nodes": {
+    "bus-redpanda": {
+      "index": "0",
+      "shortname": "bus-redpanda",
+      "longname": "clab-ndt-wifi7-mlo-security-bus-redpanda",
+      "fqdn": "bus-redpanda.ndt-wifi7-mlo-security.io",
+      "group": "",
+      "labdir": "/home/kalicobra477/github/ndt-wifi7-mlo-security/clab/clab-ndt-wifi7-mlo-security/bus-redpanda",
+      "kind": "linux",
+      "image": "redpandadata/redpanda:latest",
+      "mgmt-net": "",
+      "mgmt-intf": "",
+      "mgmt-ipv4-address": "172.20.20.10",
+      "mgmt-ipv4-prefix-length": 24,
+      "mgmt-ipv6-address": "",
+      "mgmt-ipv6-prefix-length": 0,
+      "mac-address": "",
+      "labels": {
+        "clab-mgmt-net-bridge": "br-f95d1c12f7d1",
+        "clab-node-group": "",
+        "clab-node-kind": "linux",
+        "clab-node-lab-dir": "/home/kalicobra477/github/ndt-wifi7-mlo-security/clab/clab-ndt-wifi7-mlo-security/bus-redpanda",
+        "clab-node-longname": "clab-ndt-wifi7-mlo-security-bus-redpanda",
+        "clab-node-name": "bus-redpanda",
+        "clab-node-type": "",
+        "clab-owner": "kalicobra477",
+        "clab-topo-file": "/home/kalicobra477/github/ndt-wifi7-mlo-security/clab/topo.yml",
+        "containerlab": "ndt-wifi7-mlo-security"
+      },
+      "port-bindings": [
+        {
+          "host-ip": "",
+          "host-port": 0,
+          "port": 8081,
+          "protocol": "tcp"
+        },
+        {
+          "host-ip": "",
+          "host-port": 0,
+          "port": 8082,
+          "protocol": "tcp"
+        },
+        {
+          "host-ip": "0.0.0.0",
+          "host-port": 9092,
+          "port": 9092,
+          "protocol": "tcp"
+        },
+        {
+          "host-ip": "::",
+          "host-port": 9092,
+          "port": 9092,
+          "protocol": "tcp"
+        },
+        {
+          "host-ip": "0.0.0.0",
+          "host-port": 9644,
+          "port": 9644,
+          "protocol": "tcp"
+        },
+        {
+          "host-ip": "::",
+          "host-port": 9644,
+          "port": 9644,
+          "protocol": "tcp"
+        }
+      ]
+    },
+    "grafana": {
+      "index": "1",
+      "shortname": "grafana",
+      "longname": "clab-ndt-wifi7-mlo-security-grafana",
+      "fqdn": "grafana.ndt-wifi7-mlo-security.io",
+      "group": "",
+      "labdir": "/home/kalicobra477/github/ndt-wifi7-mlo-security/clab/clab-ndt-wifi7-mlo-security/grafana",
+      "kind": "linux",
+      "image": "grafana/grafana:latest",
+      "mgmt-net": "",
+      "mgmt-intf": "",
+      "mgmt-ipv4-address": "172.20.20.30",
+      "mgmt-ipv4-prefix-length": 24,
+      "mgmt-ipv6-address": "",
+      "mgmt-ipv6-prefix-length": 0,
+      "mac-address": "",
+      "labels": {
+        "clab-mgmt-net-bridge": "br-f95d1c12f7d1",
+        "clab-node-group": "",
+        "clab-node-kind": "linux",
+        "clab-node-lab-dir": "/home/kalicobra477/github/ndt-wifi7-mlo-security/clab/clab-ndt-wifi7-mlo-security/grafana",
+        "clab-node-longname": "clab-ndt-wifi7-mlo-security-grafana",
+        "clab-node-name": "grafana",
+        "clab-node-type": "",
+        "clab-owner": "kalicobra477",
+        "clab-topo-file": "/home/kalicobra477/github/ndt-wifi7-mlo-security/clab/topo.yml",
+        "containerlab": "ndt-wifi7-mlo-security"
+      },
+      "port-bindings": [
+        {
+          "host-ip": "0.0.0.0",
+          "host-port": 3000,
+          "port": 3000,
+          "protocol": "tcp"
+        },
+        {
+          "host-ip": "::",
+          "host-port": 3000,
+          "port": 3000,
+          "protocol": "tcp"
+        }
+      ]
+    },
+    "udr-db": {
+      "index": "2",
+      "shortname": "udr-db",
+      "longname": "clab-ndt-wifi7-mlo-security-udr-db",
+      "fqdn": "udr-db.ndt-wifi7-mlo-security.io",
+      "group": "",
+      "labdir": "/home/kalicobra477/github/ndt-wifi7-mlo-security/clab/clab-ndt-wifi7-mlo-security/udr-db",
+      "kind": "linux",
+      "image": "timescale/timescaledb:latest-pg16",
+      "mgmt-net": "",
+      "mgmt-intf": "",
+      "mgmt-ipv4-address": "172.20.20.20",
+      "mgmt-ipv4-prefix-length": 24,
+      "mgmt-ipv6-address": "",
+      "mgmt-ipv6-prefix-length": 0,
+      "mac-address": "",
+      "labels": {
+        "clab-mgmt-net-bridge": "br-f95d1c12f7d1",
+        "clab-node-group": "",
+        "clab-node-kind": "linux",
+        "clab-node-lab-dir": "/home/kalicobra477/github/ndt-wifi7-mlo-security/clab/clab-ndt-wifi7-mlo-security/udr-db",
+        "clab-node-longname": "clab-ndt-wifi7-mlo-security-udr-db",
+        "clab-node-name": "udr-db",
+        "clab-node-type": "",
+        "clab-owner": "kalicobra477",
+        "clab-topo-file": "/home/kalicobra477/github/ndt-wifi7-mlo-security/clab/topo.yml",
+        "containerlab": "ndt-wifi7-mlo-security"
+      },
+      "port-bindings": [
+        {
+          "host-ip": "0.0.0.0",
+          "host-port": 5432,
+          "port": 5432,
+          "protocol": "tcp"
+        },
+        {
+          "host-ip": "::",
+          "host-port": 5432,
+          "port": 5432,
+          "protocol": "tcp"
+        }
+      ]
+    }
+  },
+  "links": [
+  ]
+}
