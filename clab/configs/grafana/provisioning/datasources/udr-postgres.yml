@@ -1,16 +1,17 @@
 apiVersion: 1
 
 datasources:
-  - name: UDR-Timescale
+  - name: UDR-Postgres
+    uid: udr_postgres
     type: postgres
     access: proxy
     url: udr-db:5432
-    database: udr
     user: udr
     secureJsonData:
       password: udr_pass
     jsonData:
-      sslmode: "disable"
+      database: udr
+      sslmode: disable
       postgresVersion: 1600
       timescaledb: true
-    isDefault: false
+    isDefault: true
