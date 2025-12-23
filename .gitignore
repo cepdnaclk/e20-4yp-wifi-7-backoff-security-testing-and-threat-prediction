@@ -28,3 +28,15 @@ sim/ns3/artifacts/
 experiments/results/
 *.pcap
 *.log
+
+# containerlab runtime artifacts (generated)
+clab/clab-*/ 
+clab/**/clab-*/ 
+**/.tls/
+**/topology-data.json
+
+# exporter runtime state
+.exporter_state/
+**/.exporter_state/
+
+
