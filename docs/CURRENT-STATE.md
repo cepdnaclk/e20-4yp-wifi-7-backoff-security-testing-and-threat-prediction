@@ -15,8 +15,9 @@ This document provides complete context about the current state of the project. 
 | WP4 | ✅ Complete | Telemetry exporter (file → Kafka) |
 | WP5 | ✅ Complete | Harmonizer (Kafka → DB) |
 | WP6 | ✅ Complete | Grafana dashboards |
-| WP7 | 🔲 Next | One-command pipeline |
-| WP8+ | 🔲 Future | Multi-scenario, security, AI |
+| WP7 | ✅ Complete | One-command pipeline |
+| WP8 | 🔲 Next | Multi-scenario support |
+| WP9+ | 🔲 Future | Security, AI, detection |
 
 ---
 
@@ -78,7 +79,15 @@ make ns3-run-example EXP_ID=20251223-1200-wifi-42       # Run WiFi example
 make exporter-build        # Build exporter image
 make exporter-run EXP_ID=20251223-1200-wifi-42          # Run exporter
 make harmonizer-build      # Build harmonizer image
-make harmonizer-run        # Run harmonizer (continuous)
+make harmonizer-run        # Run harmonizer (manual mode)
+```
+
+### One-Command Pipeline (WP7)
+```bash
+make pipeline-up           # Start harmonizer in background
+make pipeline-down         # Stop harmonizer
+make pipeline-status       # Check status and logs
+make run-exp EXP_ID=...    # Run full experiment (ns-3 → export → ingest)
 ```
 
 ### Verification
@@ -98,24 +107,30 @@ docker exec -it clab-ndt-wifi7-mlo-security-udr-db \
 
 ---
 
-## Current Workflow (Manual)
+## Current Workflow (One-Command - WP7)
 
 ```bash
-# 1. Start lab (if not running)
-make up
+# 1. Start everything (one-time setup)
+make up              # Start containerlab services
+make pipeline-up     # Start harmonizer in background
 
-# 2. Run experiment
-EXP_ID=20251223-1500-wifi-example-01
-make ns3-run-example EXP_ID=$EXP_ID
+# 2. Run experiment (single command!)
+make run-exp EXP_ID=20260103-1200-test-01
 
-# 3. Publish to Kafka
-make exporter-run EXP_ID=$EXP_ID
-
-# 4. Ingest to DB (run in separate terminal)
-make harmonizer-run
-
-# 5. View in Grafana
+# 3. View in Grafana
 # Open http://localhost:3000
+
+# 4. Run more experiments as needed
+make run-exp EXP_ID=20260103-1300-test-02
+
+# 5. Stop everything when done
+make pipeline-down   # Stop harmonizer
+make down            # Stop containerlab
+```
+
+### Quick Status Check
+```bash
+make pipeline-status  # Check harmonizer status and logs
 ```
 
 ---
@@ -269,12 +284,7 @@ __pycache__/
 
 ---
 
-## Next Steps (WP7+)
-
-### WP7: One-Command Pipeline
-- Run harmonizer as long-running service
-- Create `make pipeline-up` / `make pipeline-down`
-- Create `make run-exp EXP_ID=... SCENARIO=...`
+## Next Steps (WP8+)
 
 ### WP8: Multi-Scenario Support
 - Scenario registry in `sim/ns3/scenarios/`
@@ -299,3 +309,4 @@ __pycache__/
 - `WP4-TELEMETRY-EXPORTER.md` - WP4 details
 - `WP5-HARMONIZER.md` - WP5 details
 - `WP6-GRAFANA-DASHBOARDS.md` - WP6 details
+- `WP7-ONE-COMMAND-PIPELINE.md` - WP7 details

@@ -1,0 +1,37 @@
+# Docker Compose for NDT Pipeline Services
+# WP7: One-Command Pipeline
+#
+# Usage:
+#   make pipeline-up     # Start harmonizer as background service
+#   make pipeline-down   # Stop harmonizer
+#   make pipeline-status # Check status and logs
+#
+# The harmonizer runs continuously, consuming from Kafka and writing to DB.
+# The exporter runs on-demand via `make exporter-run` (not managed by compose).
+
+networks:
+  clab-mgmt:
+    external: true  # Created by containerlab
+
+services:
+  harmonizer:
+    image: ndt/harmonizer:local
+    container_name: ndt-pipeline-harmonizer
+    restart: unless-stopped
+    networks:
+      - clab-mgmt
+    environment:
+      KAFKA_BROKERS: ${KAFKA_BROKERS:-bus-redpanda:9092}
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-wifi7.telemetry.v0_1}
+      KAFKA_GROUP: ${KAFKA_GROUP:-harmonizer-udm-v0}
+      AUTO_OFFSET_RESET: ${AUTO_OFFSET_RESET:-latest}
+      PG_HOST: ${PG_HOST:-udr-db}
+      PG_DB: ${PG_DB:-udr}
+      PG_USER: ${PG_USER:-udr}
+      PG_PASS: ${PG_PASS:-udr_pass}
+      BATCH_SIZE: ${BATCH_SIZE:-100}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
