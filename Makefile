@@ -92,6 +92,61 @@ harmonizer-run:
 	  $(HARMONIZER_IMAGE)
 
 run-wifi-pipeline:
+	@echo "DEPRECATED: Use 'make run-exp EXP_ID=...' instead (requires 'make pipeline-up' first)"
 	@test -n "$(EXP_ID)" || (echo "EXP_ID required" && exit 1)
 	@$(MAKE) ns3-run-example EXP_ID=$(EXP_ID)
 	@$(MAKE) exporter-run EXP_ID=$(EXP_ID)
+
+# =============================================================================
+# WP7: One-Command Pipeline
+# =============================================================================
+# Usage:
+#   make pipeline-up   # Start harmonizer as background service
+#   make run-exp EXP_ID=20260103-1200-test-01  # Run full experiment
+#   make pipeline-down # Stop harmonizer
+# =============================================================================
+
+.PHONY: pipeline-up pipeline-down pipeline-status run-exp
+
+# Start long-running pipeline services (harmonizer)
+pipeline-up:
+	@echo "Starting pipeline services..."
+	@docker-compose -f docker-compose.pipeline.yml up -d
+	@echo ""
+	@echo "Pipeline services started. Check status with: make pipeline-status"
+
+# Stop pipeline services
+pipeline-down:
+	@echo "Stopping pipeline services..."
+	@docker-compose -f docker-compose.pipeline.yml down
+	@echo "Pipeline services stopped."
+
+# Check pipeline services status
+pipeline-status:
+	@docker-compose -f docker-compose.pipeline.yml ps
+	@echo ""
+	@echo "Harmonizer logs (last 10 lines):"
+	@docker-compose -f docker-compose.pipeline.yml logs --tail=10 harmonizer
+
+# Run complete experiment: ns-3 -> exporter -> (harmonizer already running)
+run-exp:
+	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make run-exp EXP_ID=20260103-1200-test-01" && exit 1)
+	@echo "=============================================="
+	@echo "Running experiment: $(EXP_ID)"
+	@echo "=============================================="
+	@echo ""
+	@echo "[1/3] Running ns-3 simulation..."
+	@$(MAKE) ns3-run-example EXP_ID=$(EXP_ID)
+	@echo ""
+	@echo "[2/3] Publishing telemetry to Kafka..."
+	@$(MAKE) exporter-run EXP_ID=$(EXP_ID)
+	@echo ""
+	@echo "[3/3] Waiting for harmonizer ingestion (5s)..."
+	@sleep 5
+	@echo ""
+	@echo "=============================================="
+	@echo "Experiment complete!"
+	@echo "=============================================="
+	@echo "View results:"
+	@echo "  - Grafana: http://localhost:3000"
+	@echo "  - DB check: docker exec -it clab-ndt-wifi7-mlo-security-udr-db psql -U udr -d udr -c \"SELECT COUNT(*) FROM metrics WHERE experiment_id='$(EXP_ID)';\""

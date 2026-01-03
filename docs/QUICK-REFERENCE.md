@@ -5,20 +5,32 @@
 ns-3 → telemetry.jsonl → Exporter → Kafka → Harmonizer → DB → Grafana
 ```
 
-## Essential Commands
+## Essential Commands (WP7)
 
 ```bash
 # Start everything
-make up
+make up              # Containerlab services
+make pipeline-up     # Harmonizer (background)
 
-# Run experiment end-to-end
-EXP_ID=20251223-1500-test-01
+# Run experiment (one command!)
+make run-exp EXP_ID=20260103-1200-test-01
+
+# Check status
+make pipeline-status
+
+# Stop everything
+make pipeline-down   # Stop harmonizer
+make down            # Stop containerlab
+```
+
+## Manual Mode (Legacy)
+
+```bash
+# Run experiment components separately
+EXP_ID=20260103-1500-test-01
 make ns3-run-example EXP_ID=$EXP_ID
 make exporter-run EXP_ID=$EXP_ID
 make harmonizer-run  # In separate terminal
-
-# Stop everything
-make down
 ```
 
 ## Service URLs
