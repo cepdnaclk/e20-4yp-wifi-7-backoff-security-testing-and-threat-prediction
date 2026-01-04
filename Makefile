@@ -150,3 +150,143 @@ run-exp:
 	@echo "View results:"
 	@echo "  - Grafana: http://localhost:3000"
 	@echo "  - DB check: docker exec -it clab-ndt-wifi7-mlo-security-udr-db psql -U udr -d udr -c \"SELECT COUNT(*) FROM metrics WHERE experiment_id='$(EXP_ID)';\""
+
+# =============================================================================
+# WP7.5: MLO Attack Scenario Targets
+# =============================================================================
+# Usage:
+#   make run-mlo-normal EXP_ID=20260103-1400-mlo-normal-42
+#   make run-mlo-positive EXP_ID=20260103-1400-mlo-attack-pos-42
+#   make run-mlo-negative EXP_ID=20260103-1400-mlo-attack-neg-42
+#   make run-mlo-exp EXP_ID=... SCENARIO=normal|positive|negative
+# =============================================================================
+
+.PHONY: run-mlo-normal run-mlo-positive run-mlo-negative run-mlo-exp
+
+SEED ?= 42
+
+# Run MLO normal baseline scenario (no attack)
+run-mlo-normal:
+	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make run-mlo-normal EXP_ID=20260103-1400-mlo-normal-42" && exit 1)
+	@docker run --rm -it \
+	  --user "$$(id -u):$$(id -g)" \
+	  -v "$(PWD)":/work \
+	  $(NS3_IMAGE) \
+	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) normal $(SEED)"
+
+# Run MLO positive bias attack scenario
+run-mlo-positive:
+	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make run-mlo-positive EXP_ID=20260103-1400-mlo-attack-pos-42" && exit 1)
+	@docker run --rm -it \
+	  --user "$$(id -u):$$(id -g)" \
+	  -v "$(PWD)":/work \
+	  $(NS3_IMAGE) \
+	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) positive $(SEED)"
+
+# Run MLO negative bias attack scenario
+run-mlo-negative:
+	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make run-mlo-negative EXP_ID=20260103-1400-mlo-attack-neg-42" && exit 1)
+	@docker run --rm -it \
+	  --user "$$(id -u):$$(id -g)" \
+	  -v "$(PWD)":/work \
+	  $(NS3_IMAGE) \
+	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) negative $(SEED)"
+
+# Full MLO pipeline: simulation + exporter (requires pipeline-up first)
+run-mlo-exp:
+	@test -n "$(EXP_ID)" || (echo "EXP_ID required" && exit 1)
+	@test -n "$(SCENARIO)" || (echo "SCENARIO required (normal|positive|negative)" && exit 1)
+	@echo "=============================================="
+	@echo "Running MLO experiment: $(EXP_ID)"
+	@echo "Scenario: $(SCENARIO)"
+	@echo "=============================================="
+	@echo ""
+	@echo "[1/3] Running ns-3 MLO simulation..."
+	@$(MAKE) run-mlo-$(SCENARIO) EXP_ID=$(EXP_ID) SEED=$(SEED)
+	@echo ""
+	@echo "[2/3] Publishing telemetry to Kafka..."
+	@$(MAKE) exporter-run EXP_ID=$(EXP_ID)
+	@echo ""
+	@echo "[3/3] Waiting for harmonizer ingestion (5s)..."
+	@sleep 5
+	@echo ""
+	@echo "=============================================="
+	@echo "MLO experiment complete!"
+	@echo "=============================================="
+	@echo "View results:"
+	@echo "  - Grafana: http://localhost:3000"
+	@echo "  - DB check: docker exec -it clab-ndt-wifi7-mlo-security-udr-db psql -U udr -d udr -c \"SELECT COUNT(*) FROM metrics WHERE experiment_id='$(EXP_ID)';\""
+
+# =============================================================================
+# Kafka Topic Management (WP7.5 Pipeline Hardening)
+# =============================================================================
+# Run 'make kafka-init' once after 'make up' to create required topics.
+# This prevents silent data loss when topics don't exist.
+# See ADR-WP7.5-02 for rationale.
+# =============================================================================
+
+.PHONY: kafka-init kafka-list kafka-reset
+
+# Create required Kafka topics (run once after 'make up')
+kafka-init:
+	@echo "Creating required Kafka topics..."
+	@docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+	  rpk topic create $(KAFKA_TOPIC) \
+	  --brokers localhost:9092 \
+	  --partitions 3 \
+	  2>/dev/null || echo "Topic may already exist (safe to ignore)"
+	@echo ""
+	@echo "Verifying topics..."
+	@docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+	  rpk topic list --brokers localhost:9092
+	@echo ""
+	@echo "Kafka topics initialized."
+
+# List all Kafka topics
+kafka-list:
+	@docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+	  rpk topic list --brokers localhost:9092
+
+# DANGER: Delete all topics (use for testing only)
+kafka-reset:
+	@echo "WARNING: This will delete ALL Kafka topics!"
+	@echo "Press Ctrl+C to cancel, or Enter to continue..."
+	@read confirm
+	@docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+	  rpk topic delete $(KAFKA_TOPIC) --brokers localhost:9092 || true
+	@echo "Kafka topics deleted. Run 'make kafka-init' to recreate."
+
+# =============================================================================
+# Exporter State Management (WP7.5 Pipeline Hardening)
+# =============================================================================
+# Use these targets to view or reset exporter state for debugging/recovery.
+# See ADR-WP7.5-01 for delivery confirmation design.
+# =============================================================================
+
+.PHONY: exporter-state exporter-reset exporter-reset-exp
+
+# Show current exporter state
+exporter-state:
+	@if [ -f .exporter_state/exporter_state.json ]; then \
+	  echo "Current exporter state:"; \
+	  cat .exporter_state/exporter_state.json | python3 -m json.tool; \
+	else \
+	  echo "No exporter state file found"; \
+	fi
+
+# Reset ALL exporter state (forces full re-export of all files)
+exporter-reset:
+	@echo "Deleting ALL exporter state..."
+	@rm -f .exporter_state/exporter_state.json
+	@echo "Exporter state reset. All files will be re-exported on next run."
+
+# Reset exporter state for specific experiment only
+exporter-reset-exp:
+	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make exporter-reset-exp EXP_ID=20260103-1400-mlo-normal-42" && exit 1)
+	@python3 -c "import json, sys; f='.exporter_state/exporter_state.json'; \
+	import os; \
+	key='/work/sim/ns3/artifacts/$(EXP_ID)/telemetry.jsonl'; \
+	state=json.load(open(f)) if os.path.exists(f) else {'files':{}}; \
+	removed=state.get('files',{}).pop(key,None); \
+	json.dump(state,open(f,'w')) if removed else None; \
+	print('Reset exporter state for $(EXP_ID)' if removed else 'No state found for $(EXP_ID)')"

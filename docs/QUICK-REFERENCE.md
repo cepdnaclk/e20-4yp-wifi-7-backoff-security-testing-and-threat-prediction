@@ -23,6 +23,24 @@ make pipeline-down   # Stop harmonizer
 make down            # Stop containerlab
 ```
 
+## MLO Attack Scenarios (WP7.5)
+
+```bash
+# Run MLO scenarios (requires pipeline-up first)
+make run-mlo-normal EXP_ID=20260103-1400-mlo-normal-42
+make run-mlo-positive EXP_ID=20260103-1400-mlo-attack-pos-42
+make run-mlo-negative EXP_ID=20260103-1400-mlo-attack-neg-42
+
+# Full pipeline with exporter
+make run-mlo-exp EXP_ID=... SCENARIO=normal|positive|negative
+```
+
+| Scenario | Bias | Purpose |
+|----------|------|---------|
+| normal | 0 | Baseline (no attack) |
+| positive | +5000 | Aggressive transmission |
+| negative | -5000 | Extreme aggression |
+
 ## Manual Mode (Legacy)
 
 ```bash
