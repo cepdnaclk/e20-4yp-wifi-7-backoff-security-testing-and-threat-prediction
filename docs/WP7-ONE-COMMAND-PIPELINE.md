@@ -251,6 +251,124 @@ This target will be removed in WP8.
 
 ---
 
+---
+
+## WP7.5: MLO Attack Scenarios
+
+WP7.5 added three Wi-Fi 7 MLO (Multi-Link Operation) backoff manipulation scenarios for GNN dataset generation and pipeline integration.
+
+### Available Scenarios
+
+| Scenario | Make Target | Source File | Bias | Purpose |
+|----------|-------------|-------------|------|---------|
+| Normal | `run-mlo-normal` | wifi7-mlo-Normal.cc | 0 | Baseline (no attack) |
+| Positive | `run-mlo-positive` | wifi7-mlo-Positive.cc | +5000 | Aggressive transmission attack |
+| Negative | `run-mlo-negative` | wifi7-mlo-Negative.cc | -5000 | Extreme aggressive attack |
+
+### MLO Metrics (13 per 0.1s window)
+
+**Network Layer:**
+- `net_throughput_mbps` - Aggregate throughput
+- `net_avg_delay_ms` - Average packet delay
+- `net_avg_jitter_ms` - Delay variation
+- `net_packet_loss_ratio` - Loss ratio
+- `net_active_flows` - Number of active flows
+
+**MAC Layer:**
+- `mac_total_tx` - Total transmitted frames
+- `mac_total_rx` - Total received frames
+- `mac_total_ack` - Total ACKs received
+- `mac_total_retrans` - Retransmission count
+- `mac_drop_count` - MAC layer drops
+
+**PHY Layer:**
+- `phy_drop_count` - PHY layer drops
+- `avg_backoff_slots` - Average backoff (key attack indicator)
+- `channel_busy_ratio` - Channel utilization
+
+### Running MLO Scenarios
+
+```bash
+# Prerequisites (if not already running)
+make up
+make pipeline-up
+
+# Run individual scenarios
+make run-mlo-normal EXP_ID=20260103-1400-mlo-normal-42
+make run-mlo-positive EXP_ID=20260103-1400-mlo-attack-pos-42
+make run-mlo-negative EXP_ID=20260103-1400-mlo-attack-neg-42
+
+# Or run with full pipeline (simulation + exporter)
+make run-mlo-exp EXP_ID=20260103-1400-mlo-normal-42 SCENARIO=normal
+make run-mlo-exp EXP_ID=20260103-1400-mlo-attack-pos-42 SCENARIO=positive
+```
+
+### Output Artifacts
+
+Each MLO run creates these files in `sim/ns3/artifacts/<EXP_ID>/`:
+
+| File | Purpose |
+|------|---------|
+| `meta.txt` | Run metadata (scenario, bias, seed, timestamps) |
+| `mlo_output.json` | Original JSON array (for GNN training) |
+| `telemetry.jsonl` | Pipeline-compatible JSONL (for Kafka/DB) |
+| `ns3_stdout.log` | Simulation stdout |
+| `ns3_stderr.log` | Simulation stderr |
+
+### Comparing Attack Scenarios
+
+```bash
+# Run all three scenarios
+make run-mlo-exp EXP_ID=20260103-1500-mlo-normal-42 SCENARIO=normal
+make run-mlo-exp EXP_ID=20260103-1500-mlo-attack-pos-42 SCENARIO=positive
+make run-mlo-exp EXP_ID=20260103-1500-mlo-attack-neg-42 SCENARIO=negative
+
+# Compare in database
+docker exec -it clab-ndt-wifi7-mlo-security-udr-db psql -U udr -d udr -c "
+  SELECT experiment_id, metric_name, AVG(value) as avg_value
+  FROM metrics
+  WHERE experiment_id LIKE '20260103-1500-mlo-%'
+  AND metric_name IN ('net_throughput_mbps', 'avg_backoff_slots', 'channel_busy_ratio')
+  GROUP BY experiment_id, metric_name
+  ORDER BY metric_name, experiment_id;
+"
+```
+
+### Architecture
+
+```
+wifi7-mlo-*.cc (ns-3)
+    │
+    ▼ --jsonPath=mlo_output.json
+JSON Array Output
+    │
+    ▼ convert_mlo_json_to_jsonl.sh
+telemetry.jsonl (JSONL format)
+    │
+    ▼ Exporter → Kafka
+WP7 Pipeline (Harmonizer → DB → Grafana)
+```
+
+**Key Design Decision:** Keep both outputs:
+- JSON array → GNN training workflow (preserved)
+- JSONL → Pipeline integration (new)
+
+### Files Added
+
+| File | Purpose |
+|------|---------|
+| `sim/ns3/scenario/run_mlo_scenario.sh` | Scenario runner script |
+| `sim/ns3/scenario/convert_mlo_json_to_jsonl.sh` | JSON → JSONL converter |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `sim/ns3/scratch/wifi7-mlo-*.cc` | Fixed to use `jsonPath` CLI arg |
+| `Makefile` | Added `run-mlo-*` targets |
+
+---
+
 ## Next Steps (→ WP8)
 
 - Multi-scenario support (scenario registry)
