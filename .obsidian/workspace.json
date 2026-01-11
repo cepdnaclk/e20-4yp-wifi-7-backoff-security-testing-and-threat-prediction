@@ -119,7 +119,8 @@
               "title": "Wifi 7"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "horizontal",
@@ -217,6 +218,7 @@
   },
   "active": "36b11f20721e5682",
   "lastOpenFiles": [
+    "Wifi 7 Security Testing and threat prection/Wifi 7 and MLO/Concepts/Backoff in Wi-Fi.md",
     "Wifi 7 Security Testing and threat prection/NDT/Digital Twins.md",
     "Wifi 7 Security Testing and threat prection/NDT/Papers.md",
     "Wifi 7 Security Testing and threat prection/NDT/Concepts.md",
@@ -255,7 +257,6 @@
     "FYP-wifi-7-security-testing-and-threat-prediction/Wifi 7 Security Testing and threat prection/Wifi 7 and MLO/Concepts/Packet Steering.md",
     "FYP-wifi-7-security-testing-and-threat-prediction/Wifi 7 Security Testing and threat prection/Wifi 7 and MLO/Research Papers/Packet Steering Mechanisms for MLO in Wi-Fi 7.md",
     "FYP-wifi-7-security-testing-and-threat-prediction/Wifi 7 Security Testing and threat prection/Wifi 7 and MLO/Concepts/Early steering and late steering and combined steering.md",
-    "FYP-wifi-7-security-testing-and-threat-prediction/Wifi 7 Security Testing and threat prection/Wifi 7 and MLO/Research Papers/Intelligent Multi-link EDCA Optimization for Delay-Bounded QoS in Wi-Fi 7.md",
     "Wi-Fi-7-MLO-White-Paper-WF7MLOWP0622.pdf",
     "FYP-wifi-7-security-testing-and-threat-prediction/Wifi 7 Security Testing and threat prection/Wifi 7 and MLO/Wifi 7/Pasted image 20251013134647.png",
     "FYP-wifi-7-security-testing-and-threat-prediction/Wifi 7 Security Testing and threat prection/Wifi 7 and MLO/Research Papers/Pasted image 20251025112150.png",
