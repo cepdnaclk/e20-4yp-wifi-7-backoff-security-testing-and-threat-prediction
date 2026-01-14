@@ -3,7 +3,7 @@ layout: home
 permalink: index.html
 
 ### Please update this with your repository name and title
-repository-name: e20-4yp-wifi7-dt-security
+repository-name: e20-4yp-wifi-7-backoff-security-testing-and-threat-prediction
 title: Digital twins for Security testing and threat prediction for wifi 7 MLO operations
 ---
 
