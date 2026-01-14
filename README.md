@@ -145,7 +145,7 @@ Future work will focus on expanding the DT's fidelity to include more advanced 8
 
 ## Links
 
-- [Project Repository](https://github.com/cepdnaclk/e20-4yp-wifi-7-backoff-security-testing-and-threat-prediction)
-- [Project Page](https://cepdnaclk.github.io/e20-4yp-wifi-7-backoff-security-testing-and-threat-prediction/)
+- [Project Repository](https://github.com/cepdnaclk/repository-name)
+- [Project Page](https://cepdnaclk.github.io/repository-name)
 - [Department of Computer Engineering](http://www.ce.pdn.ac.lk/)
 - [University of Peradeniya](https://eng.pdn.ac.lk/)
