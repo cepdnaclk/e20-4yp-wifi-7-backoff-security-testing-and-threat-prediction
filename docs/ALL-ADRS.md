@@ -30,6 +30,11 @@ This document contains all architectural decisions made during the implementatio
 - [ADR-WP5-03](#adr-wp5-03-db-idempotency-enforced-with-unique-index): DB idempotency enforced with unique index
 - [ADR-WP6-01](#adr-wp6-01-grafana-provisioning-as-code): Grafana provisioning as code
 
+### WP7.5 (Exporter Reliability)
+- [ADR-WP7.5-01](#adr-wp75-01-counter-based-delivery-confirmation): Counter-based delivery confirmation
+- [ADR-WP7.5-02](#adr-wp75-02-topic-pre-creation-and-health-checks): Topic pre-creation and health checks
+- [ADR-WP7.5-03](#adr-wp75-03-at-least-once-delivery-semantics): At-least-once delivery semantics
+
 ---
 
 ## ADR-0001: Use GitHub SSH (ed25519) for Repo Access
@@ -578,3 +583,241 @@ Datasource and dashboards are versioned in repo via provisioning mounts.
 - Provisioning YAML must be valid
 - Only one default datasource per organization
 - Dashboard JSON changes tracked in git
+
+---
+
+## ADR-WP7.5-01: Counter-Based Delivery Confirmation
+
+### Status
+Accepted
+
+### Context
+During WP7.5 MLO experiments, 1 of 3 experiments lost data. Root cause analysis revealed line 123 in `exporter.py` saves file offset state BEFORE Kafka confirms delivery.
+
+**The bug:**
+```python
+producer.produce(...)  # Line 114 - async enqueue
+producer.poll(0)       # Line 120 - process 0+ callbacks
+save_offset(...)       # Line 123 - BUG! Saves before delivery confirmed
+```
+
+**Result:** If Kafka is down or topic missing, message fails but offset already saved → permanent data loss.
+
+**Previous approaches that FAILED:**
+- `min(confirmed_offsets)` → causes infinite replays (stays at first offset)
+- `max(confirmed_offsets)` → skips gaps (data loss on out-of-order callbacks)
+- Saving in callback → async unsafe, race conditions
+- Keying by Kafka message key → duplicate keys corrupt tracking
+
+### Decision
+Use simple counter-based approach: count messages sent vs. confirmed, save final file position only after ALL messages confirmed.
+
+### Rationale
+**Why counters work:**
+1. **Simple verification:** `confirmed_count == total_sent` (all-or-nothing)
+2. **No infinite replays:** Save `f.tell()` (end of file position), next run resumes correctly
+3. **No gaps:** All messages must confirm before saving state
+4. **No duplicate tracking issues:** Just counting totals, not tracking individual offsets
+5. **Thread-safe:** Counter increment is atomic, only main thread writes state file
+6. **File is small:** 260 lines process in <1 second, no need for complex incremental processing
+
+**The fix is simple because the problem is simple:**
+- Read entire file from saved position to end
+- Send all messages with delivery callback
+- Callback increments `confirmed_count` on success, logs errors
+- Wait for all deliveries: `producer.flush(timeout=30.0)`
+- Verify: `confirmed_count == total_sent` and no errors
+- Save `f.tell()` (final file position) only if all succeeded
+- Next run: seek to saved position, continue reading
+
+### Implementation
+```python
+confirmed_count = 0
+total_sent = 0
+delivery_errors = []
+
+def delivery_report(err, msg):
+    nonlocal confirmed_count
+    if err is not None:
+        delivery_errors.append(str(err))
+    else:
+        confirmed_count += 1
+
+# Read ENTIRE file
+while line:
+    producer.produce(..., callback=delivery_report)
+    total_sent += 1
+    producer.poll(0)
+
+# Capture final file position BEFORE flush
+final_offset = f.tell()
+
+# Wait for ALL deliveries
+producer.flush(timeout=30.0)
+
+# Verify complete success
+if delivery_errors or confirmed_count != total_sent:
+    print(f"Delivery failed: {confirmed_count}/{total_sent} confirmed")
+    sys.exit(1)  # Don't save state!
+
+# All messages delivered successfully
+save_offset(state, TELEMETRY_FILE, final_offset)
+```
+
+**File modified:** `telemetry/exporters/ns3_file_exporter/exporter.py` (lines 74-130)
+
+### Consequences
+- **At-least-once semantics:** On failure, entire file replays from last saved position
+- **Database handles duplicates:** Unique index `(experiment_id, entity_id, metric_name, ts)` prevents duplicate rows
+- **Zero data loss:** State only saved after confirmed delivery of ALL messages
+- **Simple to reason about:** Binary success/failure (all or nothing)
+- **Fast enough:** 260-line file processes in <1 second, full replay is acceptable
+- **No complex offset tracking:** File position is single number, not per-message state
+
+---
+
+## ADR-WP7.5-02: Topic Pre-Creation and Health Checks
+
+### Status
+Accepted
+
+### Context
+Exporter silently fails when Kafka topic doesn't exist. Messages enqueue successfully (no error from `producer.produce()`), but delivery callbacks never arrive because topic is missing. Exporter waits in `flush()` until timeout, then exits with "0/260 confirmed" error message.
+
+**Problem:** Silent failure wastes time (30+ seconds timeout), provides unclear error, and requires manual debugging to discover missing topic.
+
+### Decision
+Check topic existence on startup using AdminClient. Fail fast with clear error message if topic missing.
+
+### Rationale
+**Benefits of pre-flight check:**
+1. **Clear error messages:** "Topic 'wifi7.telemetry.v0_1' does not exist" vs "0/260 confirmed"
+2. **Faster debugging:** Fail in <1 second vs 30+ second timeout
+3. **Prevents wasted CPU:** Don't read file or enqueue messages if topic missing
+4. **Explicit dependencies:** Makes Kafka topic requirement visible
+5. **Better UX:** Clear actionable error for operator
+
+**Why not auto-create topics:**
+- Wrong partition count or replication factor could be set
+- Topic configuration should be intentional (managed by `make kafka-init`)
+- Explicit is better than implicit for infrastructure dependencies
+
+### Implementation
+```python
+from confluent_kafka.admin import AdminClient
+
+def check_topic_exists(bootstrap_servers, topic_name, timeout=10.0):
+    admin = AdminClient({'bootstrap.servers': bootstrap_servers})
+    metadata = admin.list_topics(timeout=timeout)
+
+    if topic_name not in metadata.topics:
+        print(f"ERROR: Topic '{topic_name}' does not exist")
+        print(f"Create it with: make kafka-init")
+        sys.exit(1)
+
+    print(f"Topic '{topic_name}' exists ✓")
+
+# Call at start of main()
+check_topic_exists(KAFKA_BROKERS, KAFKA_TOPIC)
+```
+
+**Makefile target added:**
+```makefile
+kafka-init:
+	docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+	  rpk topic create wifi7.telemetry.v0_1 -p 1 -r 1
+```
+
+### Consequences
+- **Requires manual topic creation:** Operator must run `make kafka-init` before first exporter run
+- **Faster failure:** 1 second vs 30+ second timeout
+- **Better error messages:** Clear indication of missing topic
+- **Additional dependency:** AdminClient for health checks (already in confluent-kafka library)
+- **Documented in QUICK-REFERENCE.md:** Common issues section updated
+
+---
+
+## ADR-WP7.5-03: At-Least-Once Delivery Semantics
+
+### Status
+Accepted
+
+### Context
+Need to choose delivery semantics for exporter-to-database pipeline. Options:
+1. **At-most-once:** Send message, don't wait for confirmation (risk: data loss)
+2. **At-least-once:** Wait for confirmation, replay on failure (risk: duplicates)
+3. **Exactly-once:** Distributed transaction across Kafka and DB (complex, overhead)
+
+**Current state:** Database has unique index `(experiment_id, entity_id, metric_name, ts)` preventing duplicate rows.
+
+**File characteristics:**
+- Small (260 lines, 50 KB)
+- Processes in <1 second
+- Re-runs are cheap
+
+### Decision
+Use at-least-once delivery semantics with database deduplication via unique index.
+
+### Rationale
+**Why at-least-once:**
+1. **Zero data loss:** Better to replay than to lose data
+2. **Simple implementation:** Just wait for all confirmations
+3. **Database already handles duplicates:** Unique index rejects duplicates automatically
+4. **Fast enough to replay:** 260-line file processes in <1 second
+5. **No distributed transactions:** Avoid complexity of exactly-once semantics
+
+**Why not exactly-once:**
+- Requires Kafka transactions + database coordination
+- Significant complexity for minimal benefit
+- Database unique index already provides deduplication
+- File replay is fast (<1 second), overhead is negligible
+
+**Why not at-most-once:**
+- Data loss is unacceptable for research data
+- Lost samples corrupt analysis results
+- Cannot tolerate missing metrics
+
+### Implementation
+**Exporter behavior:**
+```python
+# Send all messages
+for line in file:
+    producer.produce(..., callback=delivery_report)
+    total_sent += 1
+
+# Wait for ALL confirmations
+producer.flush(timeout=30.0)
+
+# Verify all succeeded
+if confirmed_count != total_sent:
+    sys.exit(1)  # Don't save state → next run replays
+
+# All confirmed → save state
+save_offset(state, TELEMETRY_FILE, final_offset)
+```
+
+**Database deduplication:**
+```sql
+CREATE UNIQUE INDEX idx_metrics_unique
+ON metrics (experiment_id, entity_id, metric_name, ts);
+
+INSERT INTO metrics (...) VALUES (...)
+ON CONFLICT (experiment_id, entity_id, metric_name, ts)
+DO UPDATE SET value = EXCLUDED.value;  -- Idempotent upsert
+```
+
+**Result:** If exporter crashes after Kafka delivery but before saving state:
+1. Next run replays entire file
+2. Kafka receives duplicate messages
+3. Harmonizer inserts duplicate rows
+4. Database rejects duplicates via unique constraint
+5. Final state: All messages delivered, no data loss, no duplicates
+
+### Consequences
+- **Possible replays:** On failure, entire file replays from last saved position
+- **Database receives duplicates:** Harmonizer inserts all messages (including replays)
+- **Unique constraint handles it:** Database automatically deduplicates
+- **Log noise:** Duplicate key violations appear in harmonizer logs (expected, not errors)
+- **No data loss:** Guaranteed delivery of all messages
+- **Simple to reason about:** Binary success/failure (all or nothing)
+- **Performance acceptable:** 260-message replay takes <1 second

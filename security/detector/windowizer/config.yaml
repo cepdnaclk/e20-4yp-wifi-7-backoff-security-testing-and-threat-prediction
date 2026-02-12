@@ -1,0 +1,80 @@
+# Windowizer Service Configuration
+# WP8: GCN Integration - Phase 1
+# Purpose: Aggregate raw telemetry events into windowed feature segments
+
+# Kafka configuration
+kafka:
+  input_topic: wifi7.telemetry.v0_1
+  output_topic: wifi7.ml.windowed_features.v1
+  brokers: bus-redpanda:9092
+  consumer_group: windowizer-gcn-v1
+  auto_offset_reset: latest
+
+  # Consumer settings
+  consumer:
+    enable_auto_commit: false
+    max_poll_records: 500
+    session_timeout_ms: 30000
+
+  # Producer settings
+  producer:
+    acks: 1
+    compression_type: snappy
+    max_in_flight_requests: 5
+
+# Windowing configuration
+windowing:
+  segment_length: 256              # L: number of windows per segment
+  window_interval_ms: 100          # 0.1s = 100ms window size
+  timeout_ms: 5000                 # Wait 5s for incomplete windows before flushing
+  overlap: 0                       # Non-overlapping segments (stride = segment_length)
+  max_buffer_size: 10000           # Max windows to buffer per entity
+
+# Feature configuration
+features:
+  # Base features (13) - these must match telemetry contract
+  base_feature_keys:
+    - net_throughput_mbps
+    - net_avg_delay_ms
+    - net_avg_jitter_ms
+    - net_packet_loss_ratio
+    - net_active_flows
+    - mac_total_tx
+    - mac_total_rx
+    - mac_total_ack
+    - mac_total_retrans
+    - mac_drop_count
+    - phy_drop_count
+    - avg_backoff_slots
+    - channel_busy_ratio
+
+  # Cumulative counters that need delta conversion
+  cumulative_counters:
+    - mac_total_tx
+    - mac_total_rx
+    - mac_total_ack
+    - mac_total_retrans
+    - mac_drop_count
+    - phy_drop_count
+
+  # Handling for missing metrics
+  missing_metric_strategy: zero    # Options: zero, last_known, skip
+  missing_metric_tolerance: 3      # Max missing metrics per window before skipping
+
+# Logging configuration
+logging:
+  level: INFO                      # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: json                     # json or text
+  output: stdout                   # stdout or file path
+
+# Health check
+health:
+  enabled: true
+  port: 8081
+  endpoint: /health
+
+# Metrics (Prometheus)
+metrics:
+  enabled: false                   # Set to true if Prometheus is available
+  port: 9090
+  endpoint: /metrics

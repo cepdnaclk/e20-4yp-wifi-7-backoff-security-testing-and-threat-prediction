@@ -111,22 +111,22 @@ run-wifi-pipeline:
 # Start long-running pipeline services (harmonizer)
 pipeline-up:
 	@echo "Starting pipeline services..."
-	@docker-compose -f docker-compose.pipeline.yml up -d
+	@docker compose -f docker-compose.pipeline.yml up -d
 	@echo ""
 	@echo "Pipeline services started. Check status with: make pipeline-status"
 
 # Stop pipeline services
 pipeline-down:
 	@echo "Stopping pipeline services..."
-	@docker-compose -f docker-compose.pipeline.yml down
+	@docker compose -f docker-compose.pipeline.yml down
 	@echo "Pipeline services stopped."
 
 # Check pipeline services status
 pipeline-status:
-	@docker-compose -f docker-compose.pipeline.yml ps
+	@docker compose -f docker-compose.pipeline.yml ps
 	@echo ""
 	@echo "Harmonizer logs (last 10 lines):"
-	@docker-compose -f docker-compose.pipeline.yml logs --tail=10 harmonizer
+	@docker compose -f docker-compose.pipeline.yml logs --tail=10 harmonizer
 
 # Run complete experiment: ns-3 -> exporter -> (harmonizer already running)
 run-exp:
@@ -290,3 +290,171 @@ exporter-reset-exp:
 	removed=state.get('files',{}).pop(key,None); \
 	json.dump(state,open(f,'w')) if removed else None; \
 	print('Reset exporter state for $(EXP_ID)' if removed else 'No state found for $(EXP_ID)')"
+
+# =============================================================================
+# WP8: GCN Attack Detection Integration
+# =============================================================================
+# Kafka Topics Management
+# =============================================================================
+
+.PHONY: kafka-topics-create kafka-topics-list kafka-topics-delete
+
+kafka-topics-create:
+	@echo "Creating Kafka topics for GCN pipeline..."
+	@docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+		rpk topic create wifi7.ml.windowed_features.v1 \
+		--partitions 3 --retention 86400000ms || true
+	@docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+		rpk topic create wifi7.security.gcn_predictions.v1 \
+		--partitions 3 --retention 2592000000ms || true
+	@docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+		rpk topic create wifi7.security.gcn_predictions.dlq \
+		--partitions 1 --retention 604800000ms || true
+	@echo "Kafka topics created."
+
+kafka-topics-list:
+	@docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+		rpk topic list
+
+kafka-topics-delete:
+	@echo "WARNING: This will delete GCN Kafka topics!"
+	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	@docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+		rpk topic delete wifi7.ml.windowed_features.v1 || true
+	@docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+		rpk topic delete wifi7.security.gcn_predictions.v1 || true
+	@docker exec clab-ndt-wifi7-mlo-security-bus-redpanda \
+		rpk topic delete wifi7.security.gcn_predictions.dlq || true
+
+# =============================================================================
+# Windowizer Service
+# =============================================================================
+
+.PHONY: windowizer-build windowizer-run windowizer-stop windowizer-logs windowizer-health
+
+WINDOWIZER_IMAGE=ndt/windowizer:local
+
+windowizer-build:
+	@echo "Building windowizer image..."
+	@docker build -t $(WINDOWIZER_IMAGE) security/detector/windowizer/
+
+windowizer-run:
+	@echo "Starting windowizer service..."
+	@docker compose -f docker-compose.pipeline.yml up -d windowizer
+
+windowizer-stop:
+	@docker compose -f docker-compose.pipeline.yml stop windowizer
+
+windowizer-logs:
+	@docker compose -f docker-compose.pipeline.yml logs -f windowizer
+
+windowizer-health:
+	@curl -s http://localhost:8081/health || echo "Windowizer not responding"
+
+# =============================================================================
+# GCN Detector Service
+# =============================================================================
+
+.PHONY: gcn-detector-build gcn-detector-run gcn-detector-stop gcn-detector-logs gcn-detector-health
+
+GCN_DETECTOR_IMAGE=ndt/gcn-detector:local
+
+gcn-detector-build:
+	@echo "Building GCN detector image..."
+	@docker build -t $(GCN_DETECTOR_IMAGE) twin/gnn/detector/
+
+gcn-detector-run:
+	@echo "Starting GCN detector service..."
+	@docker compose -f docker-compose.pipeline.yml up -d gcn-detector
+
+gcn-detector-stop:
+	@docker compose -f docker-compose.pipeline.yml stop gcn-detector
+
+gcn-detector-logs:
+	@docker compose -f docker-compose.pipeline.yml logs -f gcn-detector
+
+gcn-detector-health:
+	@curl -s http://localhost:8080/health | jq . || echo "GCN detector not responding"
+
+# =============================================================================
+# GCN Training Pipeline
+# =============================================================================
+
+.PHONY: gcn-trainer-build gcn-train gcn-evaluate gcn-deploy
+
+GCN_TRAINER_IMAGE=ndt/gcn-trainer:local
+
+gcn-trainer-build:
+	@echo "Building GCN trainer image..."
+	@docker build -t $(GCN_TRAINER_IMAGE) twin/gnn/trainer/
+
+gcn-train:
+	@test -n "$(OUTPUT_DIR)" || (echo "OUTPUT_DIR required. Example: make gcn-train OUTPUT_DIR=twin/registry/gcn/v1.1.0" && exit 1)
+	@echo "Training new GCN model..."
+	@echo "Output: $(OUTPUT_DIR)"
+	@docker run --rm \
+		-v $(PWD)/twin/registry/gcn:/output \
+		-v $(PWD)/data:/data \
+		-v $(PWD)/twin/gnn/trainer/training.yaml:/config/training.yaml:ro \
+		$(GCN_TRAINER_IMAGE)
+
+gcn-evaluate:
+	@test -n "$(MODEL)" || (echo "MODEL required. Example: make gcn-evaluate MODEL=v1.0.0" && exit 1)
+	@echo "Evaluating model $(MODEL)..."
+	@docker run --rm \
+		-v $(PWD)/twin/registry/gcn:/models \
+		$(GCN_TRAINER_IMAGE) evaluate --model $(MODEL)
+
+gcn-deploy:
+	@test -n "$(VERSION)" || (echo "VERSION required. Example: make gcn-deploy VERSION=v1.0.0" && exit 1)
+	@echo "Deploying model version $(VERSION)..."
+	@cd twin/registry/gcn && ln -sf $(VERSION) current
+	@echo "Model $(VERSION) is now active."
+	@echo "GCN detector will reload the model automatically."
+
+# =============================================================================
+# Complete GCN Pipeline
+# =============================================================================
+
+.PHONY: gcn-up gcn-down gcn-status gcn-build
+
+gcn-build: windowizer-build gcn-detector-build
+	@echo "GCN pipeline images built."
+
+gcn-up: gcn-build
+	@echo "Starting complete GCN pipeline..."
+	@docker compose -f docker-compose.pipeline.yml up -d windowizer gcn-detector
+	@echo ""
+	@echo "GCN pipeline started. Check status with: make gcn-status"
+
+gcn-down:
+	@echo "Stopping GCN pipeline..."
+	@docker compose -f docker-compose.pipeline.yml stop windowizer gcn-detector
+
+gcn-status:
+	@echo "GCN Pipeline Status:"
+	@echo "===================="
+	@docker compose -f docker-compose.pipeline.yml ps windowizer gcn-detector
+	@echo ""
+	@echo "Windowizer logs (last 10 lines):"
+	@docker compose -f docker-compose.pipeline.yml logs --tail=10 windowizer
+	@echo ""
+	@echo "GCN Detector logs (last 10 lines):"
+	@docker compose -f docker-compose.pipeline.yml logs --tail=10 gcn-detector
+
+# =============================================================================
+# End-to-End GCN Test
+# =============================================================================
+
+.PHONY: test-gcn-e2e
+
+test-gcn-e2e:
+	@echo "Running end-to-end GCN test..."
+	@echo "This will:"
+	@echo "  1. Run ns-3 attack scenario"
+	@echo "  2. Export to Kafka"
+	@echo "  3. Windowize features"
+	@echo "  4. Run GCN inference"
+	@echo "  5. Validate predictions in DB"
+	@echo ""
+	@bash tests/gcn_e2e_test.sh || echo "Test script not yet implemented"

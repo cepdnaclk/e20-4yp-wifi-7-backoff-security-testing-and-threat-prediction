@@ -1,0 +1,18 @@
+# Windowizer Service Requirements
+# WP8 Phase 2: Window aggregation and feature engineering
+
+# Kafka client
+confluent-kafka>=2.3.0
+
+# Configuration
+pyyaml>=6.0
+
+# Logging
+python-json-logger>=2.0.7
+
+# Optional: Metrics
+# prometheus-client>=0.19.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0

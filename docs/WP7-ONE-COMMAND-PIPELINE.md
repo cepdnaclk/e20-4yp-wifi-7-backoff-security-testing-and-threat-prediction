@@ -369,6 +369,95 @@ WP7 Pipeline (Harmonizer → DB → Grafana)
 
 ---
 
+## MLO Attack Scenarios Dashboard
+
+**Access:** http://localhost:3000/d/mlo-attack-scenarios
+
+**Purpose:** Compare Wi-Fi 7 MLO backoff manipulation attacks and measure network impact.
+
+**Key Feature:** Dashboard auto-discovers MLO experiments from database - no manual configuration required.
+
+### Available Panels
+
+| # | Panel | Purpose |
+|---|-------|---------|
+| 1 | Average Backoff Slots | **Attack indicator** - shows manipulation (Normal ~5, Positive ~1411, Negative ~2.2) |
+| 2 | Network Throughput | **Primary impact** - Normal 262.5 Mbps, Positive 41.7 Mbps (-84%), Negative 146.7 Mbps (-44%) |
+| 3 | Packet Loss Ratio | Quality degradation |
+| 4 | Average Delay | Latency impact |
+| 5 | Average Jitter | Delay variation |
+| 6 | MAC Retransmissions | Contention/collision rate |
+| 7 | Channel Busy Ratio | Channel utilization |
+| 8 | Network Active Flows | Network activity level (0-5 range) |
+| 9 | Key Metrics Summary | Statistical table (avg, stddev, min, max) |
+
+### Dynamic Experiment Filter
+
+The dashboard automatically discovers all MLO experiments using a query-based template variable:
+
+```sql
+SELECT DISTINCT experiment_id FROM metrics WHERE experiment_id ~ '.*-mlo-.*' ORDER BY experiment_id DESC
+```
+
+**How it works:**
+- New experiments appear automatically after dashboard refresh (Ctrl+R)
+- Multi-select dropdown allows comparing specific scenarios
+- "All" option shows all MLO experiments
+- No manual dashboard edits required
+
+### Color Coding
+
+| Scenario | Color | Regex Pattern |
+|----------|-------|---------------|
+| Normal (baseline) | Green | `.*-normal-.*` |
+| Positive attack (+5000) | Red | `.*-attack-pos-.*` |
+| Negative attack (-5000) | Orange | `.*-attack-neg-.*` |
+
+### Usage
+
+```bash
+# Run all three scenarios
+make run-mlo-exp EXP_ID=20260105-1600-mlo-normal-42 SCENARIO=normal
+make run-mlo-exp EXP_ID=20260105-1600-mlo-attack-pos-42 SCENARIO=positive
+make run-mlo-exp EXP_ID=20260105-1600-mlo-attack-neg-42 SCENARIO=negative
+
+# Open dashboard
+# http://localhost:3000/d/mlo-attack-scenarios
+
+# Refresh dashboard (Ctrl+R) to see new experiments
+# Use experiment filter dropdown to select specific runs
+```
+
+### Interpreting Results
+
+**Attack Indicator (Panel 1 - Backoff Slots):**
+- Normal baseline: ~5 slots
+- Positive bias: 100x-300x increase (aggressive early transmission)
+- Negative bias: 50%-90% decrease (extremely aggressive)
+
+**Impact Metrics:**
+- Throughput (Panel 2): Primary measure of attack success
+- Packet Loss (Panel 3): Secondary quality indicator
+- Delay/Jitter (Panels 4-5): Tertiary QoS impact
+- Retransmissions (Panel 6): MAC layer stress indicator
+
+**Research Questions Answered:**
+1. How does backoff manipulation affect throughput? → See Panel 1 vs Panel 2 correlation
+2. What's the impact on packet loss? → Panel 3 shows quality degradation
+3. Which metrics are most sensitive? → Panel 9 statistical table shows variance
+4. Can we visually distinguish attacks? → Color-coded time series make patterns obvious
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| No data in panels | Adjust time range to cover experiment timestamps (use absolute: 2026-01-04 11:44-11:53) |
+| Only 1-2 series visible | Check experiment filter dropdown - select "All" |
+| Time series not aligned | Verify all experiments have same time window length |
+| New experiments don't appear | Refresh dashboard (Ctrl+R) - they auto-discover |
+
+---
+
 ## Next Steps (→ WP8)
 
 - Multi-scenario support (scenario registry)
