@@ -1,0 +1,71 @@
+# GCN Detector Service Configuration
+# WP8: GCN Integration - Phase 1
+# Purpose: Real-time attack detection using GCN model
+
+# Kafka configuration
+kafka:
+  input_topic: wifi7.ml.windowed_features.v1
+  output_topic: wifi7.security.gcn_predictions.v1
+  dlq_topic: wifi7.security.gcn_predictions.dlq
+  brokers: bus-redpanda:9092
+  consumer_group: gcn-detector-v1
+  auto_offset_reset: latest
+
+  # Consumer settings
+  consumer:
+    enable_auto_commit: false
+    max_poll_records: 32           # Match batch_size
+    session_timeout_ms: 30000
+
+  # Producer settings
+  producer:
+    acks: 1
+    compression_type: snappy
+    max_in_flight_requests: 5
+
+# Model configuration
+model:
+  registry_path: /app/registry       # Mounted from twin/registry/gcn/
+  active_version: current            # Symlink to active model version
+  device: cpu                        # cpu or cuda (for GPU)
+  use_derived_features: true         # Add retrans_rate, drop_rate, throughput_per_flow
+
+  # Model hot-reloading
+  watch_for_updates: true            # Watch symlink for model changes
+  reload_check_interval_s: 60        # Check every 60s
+
+# Inference configuration
+inference:
+  batch_size: 32                     # Segments per inference batch
+  threshold: 0.5                     # Attack if p_attack > threshold
+  timeout_ms: 10000                  # Max inference time per batch
+  max_queue_size: 1000               # Max segments to queue for inference
+
+# Database configuration
+database:
+  host: udr-db
+  port: 5432
+  dbname: udr
+  user: udr
+  password_env: PG_PASS              # Read password from env var
+  table: gcn_predictions
+  batch_insert_size: 100             # Batch DB inserts
+  connection_pool_size: 5
+
+# Logging configuration
+logging:
+  level: INFO                        # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: json                       # json or text
+  output: stdout                     # stdout or file path
+
+# Health check
+health:
+  enabled: true
+  port: 8080
+  endpoint: /health
+
+# Metrics (Prometheus)
+metrics:
+  enabled: false                     # Set to true if Prometheus is available
+  port: 9091
+  endpoint: /metrics

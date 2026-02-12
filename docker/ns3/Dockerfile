@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     ca-certificates \
     wget \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Use a fixed ns-3 tag for reproducibility.

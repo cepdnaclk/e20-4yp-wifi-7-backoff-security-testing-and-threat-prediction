@@ -39,4 +39,12 @@ clab/**/clab-*/
 .exporter_state/
 **/.exporter_state/
 
+# Local assistant/session state (do not commit)
+.claude/settings.local.json
+.claude/docs/context/current-session.md
+.claude/docs/context/archive/
+.claude/docs/WorkProcess/
+
+# Local Obsidian workspace state
+docs/codex/.obsidian/
 

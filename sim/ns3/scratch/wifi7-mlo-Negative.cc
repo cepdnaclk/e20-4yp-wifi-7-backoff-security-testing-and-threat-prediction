@@ -1066,7 +1066,7 @@ int main(int argc, char* argv[]) {
     cmd.Parse(argc, argv);
 
 
-    std::ofstream json("Wifi7_Datasets/Attack/session_2_scenario_1_bias_neg5000.json");        //////////////////////////////////////////// rename this here
+    std::ofstream json(jsonPath.c_str());  // Use CLI arg for output path
     json << "[\n";
     bool first = true;
     Tracer tracer{&json, &first, bias};

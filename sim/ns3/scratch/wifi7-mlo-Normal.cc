@@ -1066,7 +1066,7 @@ int main(int argc, char* argv[]) {
     cmd.AddValue ("xmlPath", "Path for XML output", xmlPath);
     cmd.Parse(argc, argv);
 
-    std::ofstream json("Wifi7_Datasets/Normal/session_2_scenario_1.json");        //////////////////////////////////////////// rename this here
+    std::ofstream json(jsonPath.c_str());  // Use CLI arg for output path
     json << "[\n";
     bool first = true;
     Tracer tracer{&json, &first, bias};

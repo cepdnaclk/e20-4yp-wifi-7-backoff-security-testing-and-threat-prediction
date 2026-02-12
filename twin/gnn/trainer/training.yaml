@@ -1,0 +1,79 @@
+# GCN Training Configuration
+# WP8: GCN Integration - Phase 1
+# Purpose: Configuration for training new GCN models
+
+# Data configuration
+data:
+  root: /data                        # Root directory for datasets
+  attack_folder: Attack              # Folder containing attack scenarios
+  normal_folder: Normal              # Folder containing normal scenarios
+  train_ratio: 0.70                  # 70% for training
+  val_ratio: 0.15                    # 15% for validation
+  test_ratio: 0.15                   # 15% for testing
+  random_seed: 42                    # For reproducibility
+
+# Model architecture
+model:
+  in_channels: 16                    # 13 base + 3 derived features
+  hidden_channels: 64                # Hidden layer dimension
+  num_layers: 2                      # Number of GCN layers
+  dropout: 0.3                       # Dropout probability
+  pooling: mean                      # Options: mean, max, concat
+
+# Training configuration
+training:
+  batch_size: 32                     # Graphs per batch
+  learning_rate: 0.001               # Initial learning rate
+  weight_decay: 0.0001               # L2 regularization
+  max_epochs: 150                    # Maximum training epochs
+  patience: 20                       # Early stopping patience
+  use_class_weights: true            # Handle class imbalance
+
+  # Data loading
+  num_workers: 4                     # DataLoader workers
+  pin_memory: true                   # Pin memory for faster GPU transfer
+
+# Optimizer configuration
+optimizer:
+  type: Adam                         # Options: Adam, SGD, AdamW
+  betas: [0.9, 0.999]               # Adam beta parameters
+  eps: 1.0e-8                        # Adam epsilon
+
+# Learning rate scheduler
+scheduler:
+  type: ReduceLROnPlateau           # Options: ReduceLROnPlateau, StepLR, CosineAnnealingLR
+  mode: max                          # Optimize for max validation F1
+  factor: 0.5                        # Reduce LR by factor
+  patience: 10                       # Epochs to wait before reducing LR
+  min_lr: 0.00001                    # Minimum learning rate
+
+# Output configuration
+output:
+  checkpoint_dir: /output            # Where to save model checkpoints
+  log_dir: /logs                     # Where to save training logs
+  save_best_only: true               # Only save best model (by val F1)
+  save_frequency: 10                 # Save checkpoint every N epochs
+
+# Device configuration
+device:
+  type: auto                         # Options: auto, cpu, cuda
+  gpu_id: 0                          # GPU ID if using cuda
+
+# Logging
+logging:
+  level: INFO
+  tensorboard: true                  # Enable TensorBoard logging
+  wandb: false                       # Weights & Biases (set to true if configured)
+
+# Evaluation
+evaluation:
+  metrics:
+    - accuracy
+    - precision
+    - recall
+    - f1
+    - roc_auc
+
+  # Save predictions on test set
+  save_test_predictions: true
+  test_predictions_file: test_predictions.json

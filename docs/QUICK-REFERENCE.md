@@ -31,6 +31,12 @@ make run-mlo-normal EXP_ID=20260103-1400-mlo-normal-42
 make run-mlo-positive EXP_ID=20260103-1400-mlo-attack-pos-42
 make run-mlo-negative EXP_ID=20260103-1400-mlo-attack-neg-42
 
+or 
+
+make run-mlo-exp EXP_ID="$(date +%Y%m%d-%H%M%S)-mlo-normal-42" SCENARIO=normal
+make run-mlo-exp EXP_ID="$(date +%Y%m%d-%H%M%S)-mlo-attack-pos-42" SCENARIO=positive
+make run-mlo-exp EXP_ID="$(date +%Y%m%d-%H%M%S)-mlo-attack-neg-42" SCENARIO=negative
+
 # Full pipeline with exporter
 make run-mlo-exp EXP_ID=... SCENARIO=normal|positive|negative
 ```
@@ -58,6 +64,20 @@ make harmonizer-run  # In separate terminal
 | Grafana | http://localhost:3000 |
 | Redpanda | localhost:9092 |
 | Database | localhost:5432 |
+
+## Grafana Dashboards
+
+| Dashboard | URL | Purpose |
+|-----------|-----|---------|
+| Throughput Comparison | http://localhost:3000/d/ndt-wp6-throughput-compare | Compare throughput across experiments |
+| **MLO Attack Scenarios** | http://localhost:3000/d/mlo-attack-scenarios | Compare MLO backoff manipulation attacks (WP7.5) |
+
+### MLO Attack Dashboard Quick Tips
+- **Experiment Filter:** Auto-discovers MLO runs from database (refresh to see new experiments)
+- **Time Range:** Use absolute time, not relative (data is historical: 2026-01-04 11:44-11:53)
+- **Scenarios:** Green=Normal, Red=Positive Attack, Orange=Negative Attack
+- **Key Metric:** Backoff slots (Panel 1) shows attack indicator
+- **Impact Metric:** Throughput (Panel 2) shows degradation
 
 ## Container Names
 ```
