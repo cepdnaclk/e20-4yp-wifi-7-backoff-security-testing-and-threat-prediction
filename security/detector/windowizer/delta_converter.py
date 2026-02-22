@@ -56,6 +56,16 @@ class DeltaConverter:
         previous_values = self.state[state_key]
         converted_windows = []
 
+        # Field name mappings for consistency with training data
+        field_name_map = {
+            'mac_total_tx': 'mac_tx_delta',
+            'mac_total_rx': 'mac_rx_delta',
+            'mac_total_ack': 'mac_ack_delta',
+            'mac_total_retrans': 'mac_retrans_delta',
+            'mac_drop_count': 'mac_drop_delta',
+            'phy_drop_count': 'phy_drop_delta'
+        }
+
         for window in windows:
             converted_window = window.copy()
 
@@ -78,11 +88,20 @@ class DeltaConverter:
                             # Treat as new counter starting from 0
                             delta = current_value
 
-                        converted_window[metric] = delta
+                        # Use delta field name to match training data
+                        delta_field_name = field_name_map.get(metric, metric)
+                        converted_window[delta_field_name] = delta
+                        # Remove original cumulative field
+                        if metric in converted_window and delta_field_name != metric:
+                            del converted_window[metric]
                     else:
                         # First window: no previous value
                         # Set delta to 0 (can't compute delta without baseline)
-                        converted_window[metric] = 0.0
+                        delta_field_name = field_name_map.get(metric, metric)
+                        converted_window[delta_field_name] = 0.0
+                        # Remove original cumulative field
+                        if metric in converted_window and delta_field_name != metric:
+                            del converted_window[metric]
 
                     # Update state with current value for next iteration
                     previous_values[metric] = current_value

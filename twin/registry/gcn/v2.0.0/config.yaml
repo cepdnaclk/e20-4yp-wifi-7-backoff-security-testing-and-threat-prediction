@@ -1,0 +1,16 @@
+# GCN Model v2.0.0 Configuration
+version: "2.0.0"
+created: 2026-02-15T10:23:27+05:30
+dataset: "data_v2_production"
+scenarios: 284
+distribution: "50-50 balanced"
+in_channels: 16
+segment_length: 256
+batch_size: 32
+hidden_channels: 64
+num_layers: 2
+dropout: 0.3
+pooling: "mean"
+max_epochs: 200
+device: cuda
+training_log: "training_v2.0.0.log"

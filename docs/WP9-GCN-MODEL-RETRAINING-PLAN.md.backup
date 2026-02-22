@@ -1,0 +1,1354 @@
+# WP9: GCN Model Retraining Plan - Comprehensive Strategy
+
+**Created**: 2026-02-13
+**Status**: Ready for Implementation
+**Version**: 1.0
+**Estimated Duration**: 5-7 days
+
+---
+
+## Executive Summary
+
+### Problem Statement
+
+The current GCN model v1.0.0 achieves excellent performance (99.4% F1) on its original training data but fails on pipeline data with 100% false positive rate. This is due to **distribution shift** - the model was trained on different simulation scenarios than what the pipeline produces.
+
+### Root Cause
+
+- **Original training data**: 12 normal + 192 attack files from `wifi7_gcn_attack_detection` repository
+- **Pipeline data**: New ns-3 simulations with different network configurations, traffic patterns, and feature distributions
+- **Result**: Model sees unfamiliar patterns and classifies everything as attack
+
+### Solution
+
+Retrain GCN model v2.0.0 using diverse scenarios generated from the pipeline's ns-3 infrastructure, ensuring the model learns patterns representative of real deployment conditions.
+
+### Success Criteria
+
+- F1 Score > 0.85 on pipeline test data
+- False Positive Rate < 10% on normal traffic
+- Recall (Attack Detection) > 90%
+- Model generalizes to unseen scenarios with varied parameters
+
+---
+
+## Table of Contents
+
+1. [Scenario Matrix Design](#1-scenario-matrix-design)
+2. [Data Collection Strategy](#2-data-collection-strategy)
+3. [Training Dataset Preparation](#3-training-dataset-preparation)
+4. [Model Training Process](#4-model-training-process)
+5. [Quality Assurance](#5-quality-assurance)
+6. [Implementation Steps](#6-implementation-steps)
+7. [Timeline & Resources](#7-timeline--resources)
+8. [Extensibility](#8-extensibility)
+
+---
+
+## 1. Scenario Matrix Design
+
+### 1.1 Objectives
+
+- **Diversity**: Generate data from MANY different scenarios to ensure generalization
+- **Balance**: 2/3 attacks (split between negative and positive), 1/3 normal
+- **Coverage**: Varied parameters to handle unseen future scenarios
+
+### 1.2 Scenario Parameters
+
+| Parameter | Description | Values | Rationale |
+|-----------|-------------|--------|-----------|
+| **Scenario Type** | Attack vs Normal | normal, positive, negative | Core classification task |
+| **Random Seed** | RNG initialization | 1-100 | Different realizations of same scenario |
+| **Attack Bias** | Backoff manipulation | -10000 to +10000 | Attack intensity variation |
+| **Number of Stations** | Network size | 2, 3, 4 | Different network densities |
+| **Data Rate** | Application traffic | 40, 60, 80, 100 Mbps | Different traffic loads |
+| **Simulation Length** | Duration | 600s, 900s, 1200s | Different observation windows |
+
+### 1.3 Scenario Matrix (300 Total Files)
+
+#### Normal Traffic (100 files = 33.3%)
+
+| Configuration | Count | Description |
+|--------------|-------|-------------|
+| **Baseline** (2 sta, 60 Mbps, 900s) | 40 | Standard configuration, seeds 1-40 |
+| **High Load** (3 sta, 100 Mbps, 900s) | 20 | High traffic density, seeds 41-60 |
+| **Low Load** (2 sta, 40 Mbps, 600s) | 20 | Low traffic, shorter duration, seeds 61-80 |
+| **Dense Network** (4 sta, 80 Mbps, 900s) | 20 | More stations, seeds 81-100 |
+
+#### Positive Attack (100 files = 33.3%)
+
+| Bias Value | Count | Configuration | Seeds |
+|------------|-------|---------------|-------|
+| +1000 | 15 | 2 sta, 60 Mbps, 900s | 1-15 |
+| +2500 | 15 | 2 sta, 60 Mbps, 900s | 16-30 |
+| +5000 | 20 | 2 sta, 60 Mbps, 900s | 31-50 |
+| +7500 | 15 | 3 sta, 80 Mbps, 900s | 51-65 |
+| +10000 | 15 | 3 sta, 80 Mbps, 900s | 66-80 |
+| +5000 (long) | 10 | 2 sta, 60 Mbps, 1200s | 81-90 |
+| +5000 (dense) | 10 | 4 sta, 100 Mbps, 900s | 91-100 |
+
+#### Negative Attack (100 files = 33.3%)
+
+| Bias Value | Count | Configuration | Seeds |
+|------------|-------|---------------|-------|
+| -1000 | 15 | 2 sta, 60 Mbps, 900s | 1-15 |
+| -2500 | 15 | 2 sta, 60 Mbps, 900s | 16-30 |
+| -5000 | 20 | 2 sta, 60 Mbps, 900s | 31-50 |
+| -7500 | 15 | 3 sta, 80 Mbps, 900s | 51-65 |
+| -10000 | 15 | 3 sta, 80 Mbps, 900s | 66-80 |
+| -5000 (long) | 10 | 2 sta, 60 Mbps, 1200s | 81-90 |
+| -5000 (dense) | 10 | 4 sta, 100 Mbps, 900s | 91-100 |
+
+### 1.4 Why This Matrix?
+
+**Diversity Sources**:
+1. Random seeds (100 per scenario type) - different stochastic realizations
+2. Attack intensities (7 bias levels) - from subtle to extreme
+3. Network configurations (4 variants) - different densities and loads
+4. Simulation durations (3 lengths) - different observation windows
+
+**Balance Justification**:
+- 33% normal: Sufficient to learn normal patterns without overwhelming attacks
+- 67% attacks: Emphasizes security focus (precision recall for attack detection)
+- 50/50 positive/negative: Equal representation of both attack types
+
+**Parameter Ranges Rationale**:
+- **Bias**: -10000 to +10000 covers full attack spectrum seen in original research
+- **Stations**: 2-4 matches typical small WiFi networks
+- **Data Rate**: 40-100 Mbps represents realistic application traffic
+- **Duration**: 600-1200s (10-20 min) provides sufficient temporal data
+
+---
+
+## 2. Data Collection Strategy
+
+### 2.1 Directory Structure
+
+```
+ndt-wifi7-mlo-security/
+├── training_data/
+│   ├── scenarios/
+│   │   ├── normal/
+│   │   │   ├── baseline/          # 40 files
+│   │   │   ├── high_load/         # 20 files
+│   │   │   ├── low_load/          # 20 files
+│   │   │   └── dense_network/     # 20 files
+│   │   ├── positive_attack/
+│   │   │   ├── bias_1000/         # 15 files
+│   │   │   ├── bias_2500/         # 15 files
+│   │   │   ├── bias_5000/         # 20 files
+│   │   │   ├── bias_7500/         # 15 files
+│   │   │   ├── bias_10000/        # 15 files
+│   │   │   ├── bias_5000_long/    # 10 files
+│   │   │   └── bias_5000_dense/   # 10 files
+│   │   └── negative_attack/
+│   │       ├── bias_neg1000/      # 15 files
+│   │       ├── bias_neg2500/      # 15 files
+│   │       ├── bias_neg5000/      # 20 files
+│   │       ├── bias_neg7500/      # 15 files
+│   │       ├── bias_neg10000/     # 15 files
+│   │       ├── bias_neg5000_long/ # 10 files
+│   │       └── bias_neg5000_dense/# 10 files
+│   ├── manifest.csv               # Scenario metadata
+│   └── README.md                  # Dataset documentation
+```
+
+### 2.2 Naming Convention
+
+```
+Format: YYYYMMDD-HHMM-<scenario>-<config>-<bias>-seed<N>.json
+
+Examples:
+- 20260213-1000-normal-baseline-0-seed1.json
+- 20260213-1005-positive-bias5000-seed31.json
+- 20260213-1010-negative-bias_neg5000-dense-seed91.json
+```
+
+### 2.3 Metadata Schema (manifest.csv)
+
+```csv
+exp_id,scenario_type,bias,seed,num_stations,data_rate_mbps,sim_time_s,config_variant,created_at,file_path,file_size_bytes,num_windows
+20260213-1000-normal-baseline-0-seed1,normal,0,1,2,60,900,baseline,2026-02-13T10:00:00Z,training_data/scenarios/normal/baseline/20260213-1000-normal-baseline-0-seed1.json,1234567,9000
+...
+```
+
+**Fields Explained**:
+- `exp_id`: Unique experiment identifier
+- `scenario_type`: normal, positive, negative
+- `bias`: Backoff bias value (-10000 to +10000)
+- `seed`: Random seed used
+- `num_stations`: Number of WiFi stations
+- `data_rate_mbps`: Application data rate
+- `sim_time_s`: Simulation duration
+- `config_variant`: baseline, high_load, low_load, dense_network, etc.
+- `created_at`: Timestamp of generation
+- `file_path`: Relative path to JSON file
+- `file_size_bytes`: File size for integrity check
+- `num_windows`: Number of 100ms windows in file
+
+### 2.4 Storage Requirements
+
+**Per-file estimates**:
+- 900s simulation @ 10Hz = 9000 windows
+- ~200 bytes per window (JSON)
+- ~1.8 MB per file
+
+**Total dataset size**:
+- 300 files × 1.8 MB = 540 MB (compressed: ~100-150 MB)
+
+**Long-term storage plan**:
+- Primary: Local filesystem (`training_data/`)
+- Backup: Git LFS (optional, for large files)
+- Archive: Compressed tarball with manifest
+
+---
+
+## 3. Training Dataset Preparation
+
+### 3.1 GCN Training Format
+
+GCN model expects JSON format matching original training data:
+
+```json
+[
+  {
+    "window": 0,
+    "bias": 0,
+    "net_throughput_mbps": 123.4,
+    "net_avg_delay_ms": 5.6,
+    "net_avg_jitter_ms": 1.2,
+    "net_packet_loss_ratio": 0.01,
+    "net_active_flows": 2,
+    "mac_total_tx": 1500,
+    "mac_total_rx": 1400,
+    "mac_total_ack": 1350,
+    "mac_total_retrans": 50,
+    "mac_drop_count": 10,
+    "phy_drop_count": 5,
+    "avg_backoff_slots": 4.8,
+    "channel_busy_ratio": 0.25
+  },
+  ...
+]
+```
+
+**Note**: The ns-3 `mlo_output.json` already matches this format, so no conversion needed.
+
+### 3.2 Dataset Split Strategy
+
+**70% Train / 15% Validation / 15% Test** (file-level split)
+
+| Split | Normal | Positive Attack | Negative Attack | Total |
+|-------|--------|----------------|----------------|-------|
+| **Train** | 70 | 70 | 70 | 210 |
+| **Validation** | 15 | 15 | 15 | 45 |
+| **Test** | 15 | 15 | 15 | 45 |
+
+**Split Algorithm** (ensures diversity):
+1. Sort files by configuration variant
+2. Within each variant, stratify by seed range
+3. Assign to train/val/test deterministically (reproducible)
+
+### 3.3 GCN Data Directory Structure
+
+```
+~/github/wifi7_gcn_attack_detection/
+├── data_v2/                    # New pipeline-trained dataset
+│   ├── Normal/                 # 100 normal files
+│   └── Attack/                 # 200 attack files (positive + negative)
+├── data_v2_splits/             # Train/val/test splits
+│   ├── train_files.txt         # 210 file paths
+│   ├── val_files.txt           # 45 file paths
+│   └── test_files.txt          # 45 file paths
+└── data_v2_manifest.csv        # Copied from training_data/manifest.csv
+```
+
+### 3.4 Data Preparation Script
+
+```bash
+#!/bin/bash
+# prepare_gcn_dataset.sh
+
+PIPELINE_DIR=~/github/ndt-wifi7-mlo-security
+GCN_DIR=~/github/wifi7_gcn_attack_detection
+
+# Create dataset directories
+mkdir -p $GCN_DIR/data_v2/{Normal,Attack}
+
+# Copy normal scenarios
+echo "Copying normal scenarios..."
+cp -v $PIPELINE_DIR/training_data/scenarios/normal/*/*.json \
+      $GCN_DIR/data_v2/Normal/
+
+# Copy attack scenarios (positive + negative merged into Attack/)
+echo "Copying positive attack scenarios..."
+cp -v $PIPELINE_DIR/training_data/scenarios/positive_attack/*/*.json \
+      $GCN_DIR/data_v2/Attack/
+
+echo "Copying negative attack scenarios..."
+cp -v $PIPELINE_DIR/training_data/scenarios/negative_attack/*/*.json \
+      $GCN_DIR/data_v2/Attack/
+
+# Copy manifest
+cp -v $PIPELINE_DIR/training_data/manifest.csv \
+      $GCN_DIR/data_v2_manifest.csv
+
+# Count files
+normal_count=$(ls $GCN_DIR/data_v2/Normal/ | wc -l)
+attack_count=$(ls $GCN_DIR/data_v2/Attack/ | wc -l)
+total_count=$((normal_count + attack_count))
+
+echo "Dataset prepared!"
+echo "Normal files: $normal_count"
+echo "Attack files: $attack_count"
+echo "Total: $total_count"
+```
+
+---
+
+## 4. Model Training Process
+
+### 4.1 Training Environment
+
+**Hardware Requirements**:
+- CPU: 8+ cores (for parallel data loading)
+- RAM: 16 GB minimum
+- GPU: NVIDIA GPU with 8GB+ VRAM (optional but recommended)
+- Storage: 5 GB free space
+
+**Software Stack**:
+- Python 3.10+
+- PyTorch 2.0+
+- PyTorch Geometric 2.3+
+- scikit-learn, pandas, numpy
+
+### 4.2 Hyperparameters (from v1.0.0 config)
+
+```yaml
+# Model Architecture
+in_channels: 16                 # 13 base + 3 derived features
+hidden_channels: 64             # GCN hidden layer size
+num_layers: 2                   # Number of GCN layers
+dropout: 0.3                    # Dropout for regularization
+pooling: mean                   # Graph pooling method
+
+# Training
+batch_size: 32                  # Segments per batch
+learning_rate: 0.001            # Adam optimizer LR
+weight_decay: 0.0001            # L2 regularization
+max_epochs: 150                 # Maximum training epochs
+patience: 20                    # Early stopping patience
+
+# Data
+segment_length: 256             # Windows per segment
+stride: 256                     # Non-overlapping segments
+test_size: 0.15                 # Test set ratio
+val_size: 0.15                  # Validation set ratio
+use_derived_features: true      # Compute retrans_rate, drop_rate, throughput_per_flow
+use_class_weights: true         # Balance class contribution
+
+# Misc
+random_seed: 42                 # Reproducibility
+device: cuda                    # cpu or cuda
+```
+
+### 4.3 Training Procedure
+
+#### Step 1: Environment Setup
+
+```bash
+cd ~/github/wifi7_gcn_attack_detection
+source venv/bin/activate
+
+# Verify dependencies
+pip install -r requirements.txt
+```
+
+#### Step 2: Backup v1.0.0 Artifacts
+
+```bash
+# Backup old checkpoints and model registry
+mv checkpoints checkpoints_v1.0.0_backup
+mv ~/github/ndt-wifi7-mlo-security/twin/registry/gcn/v1.0.0 \
+   ~/github/ndt-wifi7-mlo-security/twin/registry/gcn/v1.0.0_original
+
+mkdir checkpoints
+```
+
+#### Step 3: Run Training
+
+```bash
+python scripts/train.py \
+    --data-root data_v2 \
+    --segment-length 256 \
+    --stride 256 \
+    --batch-size 32 \
+    --hidden-channels 64 \
+    --num-layers 2 \
+    --dropout 0.3 \
+    --max-epochs 150 \
+    --patience 20 \
+    --learning-rate 0.001 \
+    --weight-decay 0.0001 \
+    --use-class-weights \
+    --use-derived-features \
+    --device cuda \
+    --random-seed 42 \
+    --checkpoint-dir checkpoints \
+    --log-dir logs
+```
+
+**Expected Output**:
+```
+Loading dataset from data_v2...
+Normal files: 100
+Attack files: 200
+Total segments: 2700 (900 normal, 1800 attack)
+
+Train segments: 1890 (630 normal, 1260 attack)
+Val segments: 405 (135 normal, 270 attack)
+Test segments: 405 (135 normal, 270 attack)
+
+Initializing model...
+WiFi7AttackGCN(in_channels=16, hidden_channels=64, num_layers=2)
+Total parameters: 12,345
+
+Training...
+Epoch 001/150: Train Loss=0.423, Val Loss=0.356, Val F1=0.712, Val Recall=0.856
+Epoch 002/150: Train Loss=0.298, Val Loss=0.267, Val F1=0.834, Val Recall=0.923
+Epoch 003/150: Train Loss=0.212, Val Loss=0.198, Val F1=0.889, Val Recall=0.967
+...
+Epoch 035/150: Train Loss=0.054, Val Loss=0.087, Val F1=0.952, Val Recall=0.989
+Early stopping triggered (no improvement for 20 epochs)
+
+Best model saved: checkpoints/best_model.pt (Epoch 35, Val F1=0.952)
+```
+
+#### Step 4: Evaluate on Test Set
+
+```bash
+python scripts/evaluate.py \
+    --model checkpoints/best_model.pt \
+    --data-root data_v2 \
+    --output checkpoints/test_results.json
+```
+
+**Expected Output**:
+```json
+{
+  "accuracy": 0.945,
+  "precision": 0.912,
+  "recall": 0.978,
+  "f1": 0.944,
+  "auc": 0.989,
+  "confusion_matrix": [[124, 11], [6, 264]],
+  "false_positive_rate": 0.081,
+  "false_negative_rate": 0.022
+}
+```
+
+### 4.4 Quality Metrics Interpretation
+
+| Metric | Target | Acceptable | Poor | Interpretation |
+|--------|--------|------------|------|----------------|
+| **F1 Score** | > 0.90 | > 0.85 | < 0.80 | Harmonic mean of precision and recall |
+| **Recall** | > 0.95 | > 0.90 | < 0.85 | Attack detection rate (security critical) |
+| **Precision** | > 0.85 | > 0.80 | < 0.75 | Attack prediction accuracy |
+| **False Positive Rate** | < 5% | < 10% | > 15% | Normal traffic misclassified as attack |
+| **False Negative Rate** | < 5% | < 10% | > 15% | Attacks misclassified as normal |
+| **ROC-AUC** | > 0.95 | > 0.90 | < 0.85 | Overall discriminative power |
+
+**If Targets Not Met**:
+1. Check for data leakage (bias in features, scaler fitted on all data)
+2. Increase dataset size (generate more diverse scenarios)
+3. Tune hyperparameters (hidden_channels, dropout, learning_rate)
+4. Verify feature extraction matches training expectations
+5. Analyze failure cases (which scenarios cause errors?)
+
+---
+
+## 5. Quality Assurance
+
+### 5.1 Model Validation Checklist
+
+#### Pre-Training Checks
+- [ ] Data format matches original GCN format (JSON array of windows)
+- [ ] 300 files generated (100 normal, 100 positive, 100 negative)
+- [ ] Manifest.csv contains all metadata fields
+- [ ] File sizes reasonable (~1-3 MB per file)
+- [ ] No duplicate experiment IDs
+- [ ] `bias` field correctly set in JSON files
+- [ ] Scaler fitted on training data only (not val/test)
+
+#### During Training
+- [ ] Training loss decreasing smoothly
+- [ ] Validation F1 > 0.85 achieved
+- [ ] No severe overfitting (train_f1 - val_f1 < 0.10)
+- [ ] Early stopping triggers (prevents overfitting)
+- [ ] Confusion matrix shows balanced performance
+- [ ] ROC-AUC > 0.90
+
+#### Post-Training Validation
+- [ ] Test F1 > 0.85
+- [ ] False positive rate < 10%
+- [ ] Recall > 0.90
+- [ ] Checkpoint files created (best_model.pt, scaler.json, config.yaml)
+- [ ] Test results saved (test_results.json)
+
+### 5.2 Pipeline Integration Testing
+
+After training, test model in actual pipeline:
+
+```bash
+# Deploy v2.0.0 to pipeline
+mkdir -p ~/github/ndt-wifi7-mlo-security/twin/registry/gcn/v2.0.0
+
+cp checkpoints/best_model.pt \
+   ~/github/ndt-wifi7-mlo-security/twin/registry/gcn/v2.0.0/
+
+cp checkpoints/scaler.json \
+   ~/github/ndt-wifi7-mlo-security/twin/registry/gcn/v2.0.0/
+
+cp checkpoints/config.yaml \
+   ~/github/ndt-wifi7-mlo-security/twin/registry/gcn/v2.0.0/
+
+cp checkpoints/test_results.json \
+   ~/github/ndt-wifi7-mlo-security/twin/registry/gcn/v2.0.0/
+
+# Update symlink
+cd ~/github/ndt-wifi7-mlo-security/twin/registry/gcn/
+rm current
+ln -s v2.0.0 current
+
+# Rebuild detector
+cd ~/github/ndt-wifi7-mlo-security
+make gcn-detector-build
+docker restart ndt-pipeline-gcn-detector
+
+# Verify model loaded
+docker logs ndt-pipeline-gcn-detector | grep "Model loaded successfully: v2.0.0"
+```
+
+#### Test 1: Normal Traffic Should NOT Trigger Alerts
+
+```bash
+TIMESTAMP=$(date -u +%Y%m%d-%H%M)
+
+# Run normal scenario
+make ns3-run-scenario EXP_ID=${TIMESTAMP}-validation-normal \
+                      SCENARIO=normal SEED=999
+
+# Export to pipeline
+make exporter-run EXP_ID=${TIMESTAMP}-validation-normal
+
+# Wait for processing
+sleep 30
+
+# Check predictions
+docker exec clab-ndt-wifi7-mlo-security-udr-db psql -U udr -d udr -c "
+SELECT
+    COUNT(*) as total_segments,
+    SUM(CASE WHEN prediction=1 THEN 1 ELSE 0 END) as detected_attacks,
+    ROUND(100.0 * SUM(CASE WHEN prediction=1 THEN 1 ELSE 0 END) / COUNT(*), 2) as attack_rate_pct,
+    ROUND(AVG(confidence)::numeric, 3) as avg_confidence
+FROM gcn_predictions
+WHERE experiment_id = '${TIMESTAMP}-validation-normal';
+"
+```
+
+**Expected**:
+- `attack_rate_pct` < 10% (low false positive rate)
+- `avg_confidence` < 0.6 for normal predictions
+
+#### Test 2: Attack Traffic Should Trigger Alerts
+
+```bash
+# Run positive attack scenario
+make ns3-run-scenario EXP_ID=${TIMESTAMP}-validation-attack \
+                      SCENARIO=positive SEED=999
+
+# Export to pipeline
+make exporter-run EXP_ID=${TIMESTAMP}-validation-attack
+
+# Wait for processing
+sleep 30
+
+# Check predictions
+docker exec clab-ndt-wifi7-mlo-security-udr-db psql -U udr -d udr -c "
+SELECT
+    COUNT(*) as total_segments,
+    SUM(CASE WHEN prediction=1 THEN 1 ELSE 0 END) as detected_attacks,
+    ROUND(100.0 * SUM(CASE WHEN prediction=1 THEN 1 ELSE 0 END) / COUNT(*), 2) as attack_rate_pct,
+    ROUND(AVG(CASE WHEN prediction=1 THEN confidence ELSE NULL END)::numeric, 3) as avg_attack_confidence
+FROM gcn_predictions
+WHERE experiment_id = '${TIMESTAMP}-validation-attack';
+"
+```
+
+**Expected**:
+- `attack_rate_pct` > 85% (high recall)
+- `avg_attack_confidence` > 0.80
+
+### 5.3 Acceptance Criteria Summary
+
+**Model Performance** (Test Set):
+- ✅ F1 Score > 0.85
+- ✅ Recall > 0.90
+- ✅ False Positive Rate < 10%
+- ✅ ROC-AUC > 0.90
+
+**Pipeline Integration**:
+- ✅ Normal traffic: < 10% false positive rate
+- ✅ Attack traffic: > 85% detection rate
+- ✅ Model loads without errors
+- ✅ Inference latency < 100ms per segment
+- ✅ Predictions written to database
+- ✅ Grafana dashboard shows correct results
+
+---
+
+## 6. Implementation Steps
+
+### Phase 1: Data Generation (2 days)
+
+**Goal**: Generate 300 diverse scenario files with proper metadata.
+
+#### Step 1.1: Create Directory Structure
+
+```bash
+cd ~/github/ndt-wifi7-mlo-security
+
+# Create training data directories
+mkdir -p training_data/scenarios/{normal,positive_attack,negative_attack}
+mkdir -p training_data/scenarios/normal/{baseline,high_load,low_load,dense_network}
+mkdir -p training_data/scenarios/positive_attack/{bias_1000,bias_2500,bias_5000,bias_7500,bias_10000,bias_5000_long,bias_5000_dense}
+mkdir -p training_data/scenarios/negative_attack/{bias_neg1000,bias_neg2500,bias_neg5000,bias_neg7500,bias_neg10000,bias_neg5000_long,bias_neg5000_dense}
+
+# Initialize manifest
+echo "exp_id,scenario_type,bias,seed,num_stations,data_rate_mbps,sim_time_s,config_variant,created_at,file_path,file_size_bytes,num_windows" > training_data/manifest.csv
+```
+
+#### Step 1.2: Create Data Generation Script
+
+Save to `scripts/generate_training_data.sh`:
+
+```bash
+#!/usr/bin/env bash
+# generate_training_data.sh
+# Generates 300 diverse scenarios for GCN model training
+
+set -euo pipefail
+
+MANIFEST="training_data/manifest.csv"
+
+# Function to run scenario and log metadata
+run_scenario() {
+    local scenario_type=$1
+    local bias=$2
+    local seed=$3
+    local num_stations=$4
+    local data_rate=$5
+    local sim_time=$6
+    local config_variant=$7
+    local output_dir=$8
+
+    TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
+    EXP_ID="${TIMESTAMP}-${scenario_type}-${config_variant}-seed${seed}"
+
+    echo "Running: $EXP_ID"
+
+    # Run simulation
+    docker run --rm \
+        --user "$(id -u):$(id -g)" \
+        -v "$(pwd)/sim/ns3:/work/sim/ns3" \
+        -v "$(pwd)/training_data:/work/training_data" \
+        ndt/ns3:local \
+        /work/sim/ns3/scenario/run_mlo_scenario.sh \
+        "$EXP_ID" \
+        "$scenario_type" \
+        "$seed" \
+        "$bias" \
+        "$sim_time"
+
+    # Move output to organized directory
+    OUTPUT_FILE="sim/ns3/artifacts/${EXP_ID}/mlo_output.json"
+    DEST_FILE="${output_dir}/${EXP_ID}.json"
+
+    if [ -f "$OUTPUT_FILE" ]; then
+        mv "$OUTPUT_FILE" "$DEST_FILE"
+
+        # Record metadata
+        FILE_SIZE=$(stat -c%s "$DEST_FILE")
+        NUM_WINDOWS=$(grep -c '"window":' "$DEST_FILE")
+        CREATED_AT=$(date -Iseconds)
+
+        echo "$EXP_ID,$scenario_type,$bias,$seed,$num_stations,$data_rate,$sim_time,$config_variant,$CREATED_AT,$DEST_FILE,$FILE_SIZE,$NUM_WINDOWS" >> "$MANIFEST"
+
+        echo "  ✓ Saved to $DEST_FILE ($NUM_WINDOWS windows, $FILE_SIZE bytes)"
+    else
+        echo "  ✗ ERROR: Output file not found"
+        return 1
+    fi
+}
+
+echo "========================================"
+echo "GCN Training Data Generation"
+echo "========================================"
+echo "Target: 300 scenarios (100 normal, 100 positive, 100 negative)"
+echo ""
+
+# ========================================
+# NORMAL SCENARIOS (100 files)
+# ========================================
+
+echo "[1/3] Generating NORMAL scenarios (100 files)..."
+
+# Baseline (40 files): 2 sta, 60 Mbps, 900s
+for seed in $(seq 1 40); do
+    run_scenario "normal" 0 $seed 2 60 900 "baseline" \
+        "training_data/scenarios/normal/baseline"
+done
+
+# High Load (20 files): 3 sta, 100 Mbps, 900s
+for seed in $(seq 41 60); do
+    run_scenario "normal" 0 $seed 3 100 900 "high_load" \
+        "training_data/scenarios/normal/high_load"
+done
+
+# Low Load (20 files): 2 sta, 40 Mbps, 600s
+for seed in $(seq 61 80); do
+    run_scenario "normal" 0 $seed 2 40 600 "low_load" \
+        "training_data/scenarios/normal/low_load"
+done
+
+# Dense Network (20 files): 4 sta, 80 Mbps, 900s
+for seed in $(seq 81 100); do
+    run_scenario "normal" 0 $seed 4 80 900 "dense_network" \
+        "training_data/scenarios/normal/dense_network"
+done
+
+# ========================================
+# POSITIVE ATTACK SCENARIOS (100 files)
+# ========================================
+
+echo "[2/3] Generating POSITIVE ATTACK scenarios (100 files)..."
+
+# Bias +1000 (15 files)
+for seed in $(seq 1 15); do
+    run_scenario "positive" 1000 $seed 2 60 900 "bias_1000" \
+        "training_data/scenarios/positive_attack/bias_1000"
+done
+
+# Bias +2500 (15 files)
+for seed in $(seq 16 30); do
+    run_scenario "positive" 2500 $seed 2 60 900 "bias_2500" \
+        "training_data/scenarios/positive_attack/bias_2500"
+done
+
+# Bias +5000 (20 files)
+for seed in $(seq 31 50); do
+    run_scenario "positive" 5000 $seed 2 60 900 "bias_5000" \
+        "training_data/scenarios/positive_attack/bias_5000"
+done
+
+# Bias +7500 (15 files)
+for seed in $(seq 51 65); do
+    run_scenario "positive" 7500 $seed 3 80 900 "bias_7500" \
+        "training_data/scenarios/positive_attack/bias_7500"
+done
+
+# Bias +10000 (15 files)
+for seed in $(seq 66 80); do
+    run_scenario "positive" 10000 $seed 3 80 900 "bias_10000" \
+        "training_data/scenarios/positive_attack/bias_10000"
+done
+
+# Bias +5000 Long (10 files)
+for seed in $(seq 81 90); do
+    run_scenario "positive" 5000 $seed 2 60 1200 "bias_5000_long" \
+        "training_data/scenarios/positive_attack/bias_5000_long"
+done
+
+# Bias +5000 Dense (10 files)
+for seed in $(seq 91 100); do
+    run_scenario "positive" 5000 $seed 4 100 900 "bias_5000_dense" \
+        "training_data/scenarios/positive_attack/bias_5000_dense"
+done
+
+# ========================================
+# NEGATIVE ATTACK SCENARIOS (100 files)
+# ========================================
+
+echo "[3/3] Generating NEGATIVE ATTACK scenarios (100 files)..."
+
+# Bias -1000 (15 files)
+for seed in $(seq 1 15); do
+    run_scenario "negative" -1000 $seed 2 60 900 "bias_neg1000" \
+        "training_data/scenarios/negative_attack/bias_neg1000"
+done
+
+# Bias -2500 (15 files)
+for seed in $(seq 16 30); do
+    run_scenario "negative" -2500 $seed 2 60 900 "bias_neg2500" \
+        "training_data/scenarios/negative_attack/bias_neg2500"
+done
+
+# Bias -5000 (20 files)
+for seed in $(seq 31 50); do
+    run_scenario "negative" -5000 $seed 2 60 900 "bias_neg5000" \
+        "training_data/scenarios/negative_attack/bias_neg5000"
+done
+
+# Bias -7500 (15 files)
+for seed in $(seq 51 65); do
+    run_scenario "negative" -7500 $seed 3 80 900 "bias_neg7500" \
+        "training_data/scenarios/negative_attack/bias_neg7500"
+done
+
+# Bias -10000 (15 files)
+for seed in $(seq 66 80); do
+    run_scenario "negative" -10000 $seed 3 80 900 "bias_neg10000" \
+        "training_data/scenarios/negative_attack/bias_neg10000"
+done
+
+# Bias -5000 Long (10 files)
+for seed in $(seq 81 90); do
+    run_scenario "negative" -5000 $seed 2 60 1200 "bias_neg5000_long" \
+        "training_data/scenarios/negative_attack/bias_neg5000_long"
+done
+
+# Bias -5000 Dense (10 files)
+for seed in $(seq 91 100); do
+    run_scenario "negative" -5000 $seed 4 100 900 "bias_neg5000_dense" \
+        "training_data/scenarios/negative_attack/bias_neg5000_dense"
+done
+
+# ========================================
+# SUMMARY
+# ========================================
+
+echo ""
+echo "========================================"
+echo "Data Generation Complete!"
+echo "========================================"
+
+normal_count=$(find training_data/scenarios/normal -name "*.json" | wc -l)
+positive_count=$(find training_data/scenarios/positive_attack -name "*.json" | wc -l)
+negative_count=$(find training_data/scenarios/negative_attack -name "*.json" | wc -l)
+total_count=$((normal_count + positive_count + negative_count))
+
+echo "Normal scenarios:    $normal_count"
+echo "Positive attacks:    $positive_count"
+echo "Negative attacks:    $negative_count"
+echo "Total:               $total_count / 300"
+echo ""
+echo "Manifest: $MANIFEST"
+echo "Next: Run prepare_gcn_dataset.sh to organize for GCN training"
+```
+
+#### Step 1.3: Run Data Generation
+
+```bash
+chmod +x scripts/generate_training_data.sh
+./scripts/generate_training_data.sh
+```
+
+**Expected Duration**: ~24-48 hours (300 simulations × 15 min avg = 75 hours compute, parallelizable)
+
+**Optimization**: Run in parallel batches of 10-20 simulations
+
+### Phase 2: Dataset Preparation (4 hours)
+
+**Goal**: Organize generated data for GCN training.
+
+#### Step 2.1: Create Dataset Preparation Script
+
+Save to `scripts/prepare_gcn_dataset.sh`:
+
+```bash
+#!/usr/bin/env bash
+# prepare_gcn_dataset.sh
+# Organizes pipeline-generated data for GCN training
+
+set -euo pipefail
+
+PIPELINE_DIR=~/github/ndt-wifi7-mlo-security
+GCN_DIR=~/github/wifi7_gcn_attack_detection
+
+echo "========================================"
+echo "GCN Dataset Preparation"
+echo "========================================"
+
+# Create dataset directories
+mkdir -p $GCN_DIR/data_v2/{Normal,Attack}
+mkdir -p $GCN_DIR/data_v2_splits
+
+# Copy normal scenarios
+echo "Copying normal scenarios..."
+cp -v $PIPELINE_DIR/training_data/scenarios/normal/*/*.json \
+      $GCN_DIR/data_v2/Normal/
+
+# Copy attack scenarios (positive + negative merged)
+echo "Copying positive attack scenarios..."
+cp -v $PIPELINE_DIR/training_data/scenarios/positive_attack/*/*.json \
+      $GCN_DIR/data_v2/Attack/
+
+echo "Copying negative attack scenarios..."
+cp -v $PIPELINE_DIR/training_data/scenarios/negative_attack/*/*.json \
+      $GCN_DIR/data_v2/Attack/
+
+# Copy manifest
+cp -v $PIPELINE_DIR/training_data/manifest.csv \
+      $GCN_DIR/data_v2_manifest.csv
+
+# Count files
+normal_count=$(ls $GCN_DIR/data_v2/Normal/ | wc -l)
+attack_count=$(ls $GCN_DIR/data_v2/Attack/ | wc -l)
+total_count=$((normal_count + attack_count))
+
+echo ""
+echo "========================================"
+echo "Dataset Prepared!"
+echo "========================================"
+echo "Normal files:  $normal_count"
+echo "Attack files:  $attack_count"
+echo "Total:         $total_count"
+echo ""
+echo "Location: $GCN_DIR/data_v2/"
+echo "Manifest: $GCN_DIR/data_v2_manifest.csv"
+echo ""
+echo "Next: Train model with 'cd $GCN_DIR && python scripts/train.py --data-root data_v2'"
+```
+
+#### Step 2.2: Run Dataset Preparation
+
+```bash
+chmod +x scripts/prepare_gcn_dataset.sh
+./scripts/prepare_gcn_dataset.sh
+```
+
+**Expected Duration**: 5-10 minutes
+
+### Phase 3: Model Training (1-2 days)
+
+**Goal**: Train GCN model v2.0.0 on pipeline data.
+
+#### Step 3.1: Training Execution
+
+```bash
+cd ~/github/wifi7_gcn_attack_detection
+source venv/bin/activate
+
+# Backup v1.0.0
+mv checkpoints checkpoints_v1.0.0_backup
+
+# Create new checkpoint directory
+mkdir checkpoints
+
+# Train model
+python scripts/train.py \
+    --data-root data_v2 \
+    --segment-length 256 \
+    --stride 256 \
+    --batch-size 32 \
+    --hidden-channels 64 \
+    --num-layers 2 \
+    --dropout 0.3 \
+    --max-epochs 150 \
+    --patience 20 \
+    --learning-rate 0.001 \
+    --weight-decay 0.0001 \
+    --use-class-weights \
+    --use-derived-features \
+    --device cuda \
+    --random-seed 42 \
+    --checkpoint-dir checkpoints \
+    --log-dir logs
+```
+
+**Monitor Training**:
+```bash
+# Watch logs in real-time
+tail -f logs/train_*.log
+
+# Check tensorboard (if enabled)
+tensorboard --logdir logs
+```
+
+**Expected Duration**: 4-12 hours (depends on GPU)
+
+#### Step 3.2: Evaluate Model
+
+```bash
+python scripts/evaluate.py \
+    --model checkpoints/best_model.pt \
+    --data-root data_v2 \
+    --output checkpoints/test_results.json
+
+# View results
+cat checkpoints/test_results.json
+```
+
+### Phase 4: Model Deployment (2 hours)
+
+**Goal**: Deploy v2.0.0 to pipeline and validate.
+
+#### Step 4.1: Copy to Model Registry
+
+```bash
+PIPELINE=~/github/ndt-wifi7-mlo-security
+GCN_REPO=~/github/wifi7_gcn_attack_detection
+
+# Create v2.0.0 directory
+mkdir -p $PIPELINE/twin/registry/gcn/v2.0.0
+
+# Copy artifacts
+cp $GCN_REPO/checkpoints/best_model.pt \
+   $PIPELINE/twin/registry/gcn/v2.0.0/
+
+cp $GCN_REPO/checkpoints/scaler.json \
+   $PIPELINE/twin/registry/gcn/v2.0.0/
+
+cp $GCN_REPO/checkpoints/config.yaml \
+   $PIPELINE/twin/registry/gcn/v2.0.0/
+
+cp $GCN_REPO/checkpoints/test_results.json \
+   $PIPELINE/twin/registry/gcn/v2.0.0/
+
+# Create README
+cat > $PIPELINE/twin/registry/gcn/v2.0.0/README.md << EOF
+# GCN Model v2.0.0
+
+**Created**: $(date -u +%Y-%m-%d)
+**Status**: Production
+**Training Dataset**: data_v2 (300 pipeline-generated scenarios)
+
+## Performance (Test Set)
+
+- F1 Score: $(jq .f1 $GCN_REPO/checkpoints/test_results.json)
+- Precision: $(jq .precision $GCN_REPO/checkpoints/test_results.json)
+- Recall: $(jq .recall $GCN_REPO/checkpoints/test_results.json)
+- ROC-AUC: $(jq .auc $GCN_REPO/checkpoints/test_results.json)
+
+## Training Details
+
+- **Dataset**: 300 scenarios (100 normal, 200 attack)
+- **Train/Val/Test**: 210 / 45 / 45 files
+- **Segments**: ~2700 total (256-window segments)
+- **Features**: 16 (13 base + 3 derived)
+- **Epochs**: $(jq .best_epoch $GCN_REPO/checkpoints/test_results.json)
+- **Best Val F1**: $(jq .best_val_f1 $GCN_REPO/checkpoints/test_results.json)
+
+## Changes from v1.0.0
+
+- Trained on pipeline-generated data (not original GCN repo data)
+- Diverse scenarios: varied bias, stations, data rates, durations
+- Matches feature distributions from ns-3 simulations
+- Should have low false positive rate on pipeline data
+
+## Deployment
+
+Deployed: $(date -u +%Y-%m-%d)
+Git SHA: $(cd $PIPELINE && git rev-parse --short HEAD)
+EOF
+
+# Update symlink
+cd $PIPELINE/twin/registry/gcn/
+rm current
+ln -s v2.0.0 current
+```
+
+#### Step 4.2: Rebuild and Restart Detector
+
+```bash
+cd $PIPELINE
+
+# Rebuild detector image
+make gcn-detector-build
+
+# Restart detector
+docker restart ndt-pipeline-gcn-detector
+
+# Verify model loaded
+docker logs ndt-pipeline-gcn-detector | grep "Model loaded successfully: v2.0.0"
+```
+
+### Phase 5: Validation & Testing (1 day)
+
+**Goal**: Verify model performs well on fresh pipeline data.
+
+#### Step 5.1: Normal Traffic Test
+
+```bash
+cd ~/github/ndt-wifi7-mlo-security
+
+TIMESTAMP=$(date -u +%Y%m%d-%H%M)
+
+# Run normal scenario (not in training set)
+make ns3-run-scenario \
+    EXP_ID=${TIMESTAMP}-validation-normal \
+    SCENARIO=normal \
+    SEED=999
+
+# Export to pipeline
+make exporter-run EXP_ID=${TIMESTAMP}-validation-normal
+
+# Wait for processing
+sleep 30
+
+# Check predictions
+docker exec clab-ndt-wifi7-mlo-security-udr-db psql -U udr -d udr -c "
+SELECT
+    COUNT(*) as total_segments,
+    SUM(CASE WHEN prediction=1 THEN 1 ELSE 0 END) as detected_attacks,
+    ROUND(100.0 * SUM(CASE WHEN prediction=1 THEN 1 ELSE 0 END) / COUNT(*), 2) as attack_rate_pct,
+    ROUND(AVG(confidence)::numeric, 3) as avg_confidence
+FROM gcn_predictions
+WHERE experiment_id = '${TIMESTAMP}-validation-normal';
+"
+```
+
+**Expected**:
+- `attack_rate_pct` < 10%
+- `avg_confidence` < 0.6
+
+#### Step 5.2: Attack Traffic Test
+
+```bash
+# Run positive attack scenario (not in training set)
+make ns3-run-scenario \
+    EXP_ID=${TIMESTAMP}-validation-attack-pos \
+    SCENARIO=positive \
+    SEED=999
+
+make exporter-run EXP_ID=${TIMESTAMP}-validation-attack-pos
+
+sleep 30
+
+docker exec clab-ndt-wifi7-mlo-security-udr-db psql -U udr -d udr -c "
+SELECT
+    COUNT(*) as total_segments,
+    SUM(CASE WHEN prediction=1 THEN 1 ELSE 0 END) as detected_attacks,
+    ROUND(100.0 * SUM(CASE WHEN prediction=1 THEN 1 ELSE 0 END) / COUNT(*), 2) as attack_rate_pct,
+    ROUND(AVG(CASE WHEN prediction=1 THEN confidence ELSE NULL END)::numeric, 3) as avg_attack_confidence
+FROM gcn_predictions
+WHERE experiment_id = '${TIMESTAMP}-validation-attack-pos';
+"
+```
+
+**Expected**:
+- `attack_rate_pct` > 85%
+- `avg_attack_confidence` > 0.80
+
+#### Step 5.3: Negative Attack Test
+
+```bash
+make ns3-run-scenario \
+    EXP_ID=${TIMESTAMP}-validation-attack-neg \
+    SCENARIO=negative \
+    SEED=999
+
+make exporter-run EXP_ID=${TIMESTAMP}-validation-attack-neg
+
+sleep 30
+
+docker exec clab-ndt-wifi7-mlo-security-udr-db psql -U udr -d udr -c "
+SELECT
+    COUNT(*) as total_segments,
+    SUM(CASE WHEN prediction=1 THEN 1 ELSE 0 END) as detected_attacks,
+    ROUND(100.0 * SUM(CASE WHEN prediction=1 THEN 1 ELSE 0 END) / COUNT(*), 2) as attack_rate_pct
+FROM gcn_predictions
+WHERE experiment_id = '${TIMESTAMP}-validation-attack-neg';
+"
+```
+
+**Expected**:
+- `attack_rate_pct` > 85%
+
+#### Step 5.4: Grafana Dashboard Verification
+
+```bash
+# Open dashboard
+open http://localhost:3000/d/gcn-attack-detection
+
+# Verify:
+# - Normal scenario shows mostly green (prediction=0)
+# - Attack scenarios show mostly red (prediction=1)
+# - Confidence scores make sense
+# - No service errors
+```
+
+---
+
+## 7. Timeline & Resources
+
+### 7.1 Detailed Timeline
+
+| Phase | Tasks | Duration | Dependencies | Resources |
+|-------|-------|----------|--------------|-----------|
+| **Phase 1: Data Generation** | | | | |
+| 1.1 | Setup directories | 30 min | None | Dev machine |
+| 1.2 | Create generation script | 2 hours | 1.1 | Developer |
+| 1.3 | Run 300 simulations | 24-48 hours | 1.2 | GPU server (parallel) |
+| 1.4 | Verify data quality | 2 hours | 1.3 | Developer |
+| **Phase 2: Dataset Prep** | | | | |
+| 2.1 | Create prep script | 1 hour | Phase 1 | Developer |
+| 2.2 | Organize for GCN | 30 min | 2.1 | Dev machine |
+| 2.3 | Verify splits | 30 min | 2.2 | Developer |
+| **Phase 3: Training** | | | | |
+| 3.1 | Setup environment | 1 hour | Phase 2 | Dev machine |
+| 3.2 | Run training | 4-12 hours | 3.1 | GPU server |
+| 3.3 | Evaluate model | 1 hour | 3.2 | Developer |
+| 3.4 | Analyze results | 2 hours | 3.3 | Developer |
+| **Phase 4: Deployment** | | | | |
+| 4.1 | Copy to registry | 30 min | Phase 3 | Dev machine |
+| 4.2 | Rebuild detector | 30 min | 4.1 | Dev machine |
+| 4.3 | Integration test | 1 hour | 4.2 | Developer |
+| **Phase 5: Validation** | | | | |
+| 5.1 | Normal traffic test | 1 hour | Phase 4 | Dev machine |
+| 5.2 | Attack traffic test | 1 hour | Phase 4 | Dev machine |
+| 5.3 | Dashboard review | 1 hour | 5.2 | Developer |
+| 5.4 | Documentation | 2 hours | 5.3 | Developer |
+
+**Total Elapsed Time**: 5-7 days (with parallel data generation)
+**Total Active Work**: 20-25 hours (developer time)
+
+### 7.2 Resource Requirements
+
+**Compute**:
+- ns-3 simulations: 8-core CPU, 16GB RAM, 100GB disk
+- Model training: GPU with 8GB+ VRAM (or 16-core CPU)
+- Pipeline testing: 4-core CPU, 8GB RAM
+
+**Storage**:
+- Training data: ~500 MB (300 JSON files)
+- Model artifacts: ~200 MB (checkpoints, logs)
+- Temporary files: ~1 GB (simulation outputs)
+
+**Network**:
+- None (all local operations)
+
+### 7.3 Parallelization Strategy
+
+**Data Generation** (biggest bottleneck):
+
+```bash
+# Split into 10 parallel batches
+# Each batch runs 30 scenarios
+# 10 batches × 2 hours = 20 hours total (vs 75 hours serial)
+
+# Batch 1: Normal baseline seeds 1-40
+# Batch 2: Normal high_load seeds 41-60 + low_load seeds 61-80
+# Batch 3: Positive bias_1000 + bias_2500
+# Batch 4: Positive bias_5000
+# ... etc
+
+# Use GNU parallel or tmux sessions
+seq 1 10 | parallel -j 10 './scripts/run_batch_{}.sh'
+```
+
+**Expected Speedup**: 75 hours → 8-10 hours
+
+---
+
+## 8. Extensibility
+
+### 8.1 Adding More Scenarios Later
+
+To extend the dataset with additional scenarios:
+
+```bash
+# Generate new scenarios
+./scripts/generate_training_data.sh \
+    --scenario positive \
+    --bias 3000 \
+    --seeds 101-120 \
+    --config baseline
+
+# Append to manifest
+cat new_scenarios_manifest.csv >> training_data/manifest.csv
+
+# Copy to GCN dataset
+cp training_data/scenarios/positive_attack/bias_3000/*.json \
+   ~/github/wifi7_gcn_attack_detection/data_v2/Attack/
+
+# Retrain model
+cd ~/github/wifi7_gcn_attack_detection
+python scripts/train.py --data-root data_v2 --resume checkpoints/best_model.pt
+```
+
+### 8.2 Hyperparameter Tuning
+
+If initial model performance is poor, try tuning:
+
+```yaml
+# Increase model capacity
+hidden_channels: 128  # (was 64)
+num_layers: 3         # (was 2)
+
+# Reduce overfitting
+dropout: 0.5          # (was 0.3)
+weight_decay: 0.001   # (was 0.0001)
+
+# Adjust learning
+learning_rate: 0.0005 # (was 0.001)
+batch_size: 16        # (was 32)
+```
+
+### 8.3 Advanced Attack Scenarios
+
+Future scenarios to add for robustness:
+
+| Scenario | Description | Parameters |
+|----------|-------------|------------|
+| **Mixed Bias** | Combine positive and negative attacks | bias varies per station |
+| **Dynamic Bias** | Bias changes over time | bias = f(time) |
+| **Multi-Station Attack** | Multiple attackers | 2+ attacking stations |
+| **Stealthy Attack** | Low bias values | bias ∈ [-500, +500] |
+| **Burst Attack** | Intermittent attacks | attack_duration < sim_time |
+
+### 8.4 Model Versioning Strategy
+
+```
+twin/registry/gcn/
+├── v1.0.0/            # Original model (GCN repo data)
+├── v2.0.0/            # Pipeline data (300 scenarios)
+├── v2.1.0/            # v2.0.0 + 100 additional scenarios
+├── v2.2.0/            # v2.1.0 + hyperparameter tuning
+├── v3.0.0/            # New architecture (e.g., GAT, GraphSAGE)
+└── current -> v2.0.0  # Symlink to active model
+```
+
+**Versioning Rules**:
+- **Major** (X.0.0): Architecture change or dataset overhaul
+- **Minor** (x.Y.0): Dataset expansion or hyperparameter change
+- **Patch** (x.y.Z): Bug fixes or minor adjustments
+
+---
+
+## Summary
+
+This comprehensive plan provides:
+
+1. **Scenario Matrix**: 300 diverse scenarios (100 normal, 200 attack) with varied parameters
+2. **Data Persistence**: Organized directory structure with metadata tracking
+3. **Proper Labeling**: manifest.csv tracks all scenario parameters
+4. **Chunking Method**: 256-window segments (existing GCN approach)
+5. **Generalization**: Diverse configurations ensure model works on unseen scenarios
+
+**Key Innovations**:
+- **Diversity First**: 7 bias levels, 4 network configs, 3 durations
+- **Balanced Distribution**: 1/3 normal, 2/3 attacks (security focus)
+- **Extensible Design**: Easy to add more scenarios incrementally
+- **Reproducible**: manifest.csv enables exact scenario recreation
+- **Pipeline-Native**: Data generated from same ns-3 infrastructure as deployment
+
+**Expected Outcome**: GCN model v2.0.0 with >85% F1 score and <10% false positive rate on pipeline data.
+
+---
+
+**Created**: 2026-02-13
+**Author**: Claude Sonnet 4.5 (Planning Agent)
+**Status**: Ready for Implementation
+**Estimated Duration**: 5-7 days
+**Next Steps**: Begin Phase 1 data generation
