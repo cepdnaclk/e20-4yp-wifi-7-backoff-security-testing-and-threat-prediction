@@ -33,18 +33,19 @@ class FeatureProcessor:
         self.use_derived_features = use_derived_features
 
         # Base feature keys (order matters!)
+        # Updated to match delta field names from windowizer
         self.base_feature_keys = [
             'net_throughput_mbps',
             'net_avg_delay_ms',
             'net_avg_jitter_ms',
             'net_packet_loss_ratio',
             'net_active_flows',
-            'mac_total_tx',
-            'mac_total_rx',
-            'mac_total_ack',
-            'mac_total_retrans',
-            'mac_drop_count',
-            'phy_drop_count',
+            'mac_tx_delta',
+            'mac_rx_delta',
+            'mac_ack_delta',
+            'mac_retrans_delta',
+            'mac_drop_delta',
+            'phy_drop_delta',
             'avg_backoff_slots',
             'channel_busy_ratio'
         ]
@@ -81,21 +82,21 @@ class FeatureProcessor:
             window_copy = window.copy()
 
             # Retransmission rate
-            mac_total_tx = window.get('mac_total_tx', 0.0)
-            mac_total_retrans = window.get('mac_total_retrans', 0.0)
+            mac_tx_delta = window.get('mac_tx_delta', 0.0)
+            mac_retrans_delta = window.get('mac_retrans_delta', 0.0)
 
-            if mac_total_tx > 0:
-                window_copy['retrans_rate'] = mac_total_retrans / mac_total_tx
+            if mac_tx_delta > 0:
+                window_copy['retrans_rate'] = mac_retrans_delta / mac_tx_delta
             else:
                 window_copy['retrans_rate'] = 0.0
 
             # Drop rate
-            mac_drop = window.get('mac_drop_count', 0.0)
-            phy_drop = window.get('phy_drop_count', 0.0)
+            mac_drop = window.get('mac_drop_delta', 0.0)
+            phy_drop = window.get('phy_drop_delta', 0.0)
             total_drops = mac_drop + phy_drop
 
-            if mac_total_tx > 0:
-                window_copy['drop_rate'] = total_drops / mac_total_tx
+            if mac_tx_delta > 0:
+                window_copy['drop_rate'] = total_drops / mac_tx_delta
             else:
                 window_copy['drop_rate'] = 0.0
 

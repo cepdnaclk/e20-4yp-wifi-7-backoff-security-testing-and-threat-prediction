@@ -1052,7 +1052,7 @@ void ApplyAttack(NetDeviceContainer& devs, int bias, uint32_t minCw) {
 }
 
 int main(int argc, char* argv[]) {
-    uint32_t nSta = 2, nAp = 2, minCw = 15;
+    uint32_t nSta = 2, nAp = 1, minCw = 15;
     double bias = 0, simTime = 240.0;
 
     std::string jsonPath = "default.json";
@@ -1109,7 +1109,7 @@ int main(int argc, char* argv[]) {
     OnOffHelper onoff("ns3::UdpSocketFactory", Address());
     onoff.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
     onoff.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
-    onoff.SetAttribute("DataRate", DataRateValue(DataRate("800Mbps"))); 
+    onoff.SetAttribute("DataRate", DataRateValue(DataRate("50Mbps"))); 
     onoff.SetAttribute("PacketSize", UintegerValue(1024));
 
     // Create Mesh Traffic
