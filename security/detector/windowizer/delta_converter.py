@@ -96,9 +96,10 @@ class DeltaConverter:
                             del converted_window[metric]
                     else:
                         # First window: no previous value
-                        # Set delta to 0 (can't compute delta without baseline)
+                        # Match training preprocessing behavior:
+                        # first delta equals the first cumulative value.
                         delta_field_name = field_name_map.get(metric, metric)
-                        converted_window[delta_field_name] = 0.0
+                        converted_window[delta_field_name] = current_value
                         # Remove original cumulative field
                         if metric in converted_window and delta_field_name != metric:
                             del converted_window[metric]

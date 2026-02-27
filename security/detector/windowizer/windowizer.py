@@ -75,6 +75,12 @@ class Windowizer:
         # State tracking
         # Map: (experiment_id, entity_id) -> window_index
         self.window_indices = defaultdict(int)
+        # Pending windows across batches to avoid zero-filling split windows.
+        # Key: (experiment_id, window_ts, entity_id)
+        # Value: {'window_data': {metric: value}, 'first_seen': epoch_seconds}
+        self.pending_windows = {}
+        self.window_timeout_ms = self.config['windowing'].get('timeout_ms', 5000)
+        self.missing_metric_strategy = self.config['features'].get('missing_metric_strategy', 'zero')
 
         # Batch of events to aggregate
         self.event_batch = []
@@ -115,48 +121,104 @@ class Windowizer:
 
         # Aggregate events into windows
         windows = self.aggregator.aggregate_events(self.event_batch)
+        self._merge_pending_windows(windows)
+        self._process_pending_windows(force=False)
 
-        # Group windows by (experiment_id, entity_id)
-        windows_by_entity = defaultdict(list)
+        # Clear batch
+        self.event_batch.clear()
+
+    def _merge_pending_windows(self, windows: Dict):
+        """
+        Merge newly aggregated windows into pending state.
+
+        Args:
+            windows: Dict[(experiment_id, window_ts, entity_id), metrics]
+        """
+        now = time.time()
 
         for window_key, window_data in windows.items():
-            experiment_id, window_ts, entity_id = window_key
+            if window_key not in self.pending_windows:
+                self.pending_windows[window_key] = {
+                    'window_data': window_data.copy(),
+                    'first_seen': now
+                }
+            else:
+                self.pending_windows[window_key]['window_data'].update(window_data)
 
-            # Check completeness
-            if not self.aggregator.is_window_complete(window_data):
-                # Fill missing metrics
-                strategy = self.config['features'].get('missing_metric_strategy', 'zero')
-                window_data = self.aggregator.fill_missing_metrics(window_data, strategy)
+    def _process_pending_windows(self, force: bool = False):
+        """
+        Emit ready windows from pending state.
 
-            # Get window index
-            entity_key = (experiment_id, entity_id)
-            window_idx = self.window_indices[entity_key]
-            self.window_indices[entity_key] += 1
+        Windows are processed in timestamp order per entity. This guarantees
+        ordered sequences for delta conversion and avoids partial-window
+        corruption at batch boundaries.
 
-            windows_by_entity[entity_key].append({
-                'window_data': window_data,
-                'window_ts': window_ts,
-                'window_idx': window_idx
-            })
+        Args:
+            force: If True, flush all pending windows (fill missing metrics)
+        """
+        if not self.pending_windows:
+            return
 
-        # Process windows per entity
+        now = time.time()
+        pending_by_entity = defaultdict(list)
+
+        for window_key in self.pending_windows.keys():
+            experiment_id, _, entity_id = window_key
+            pending_by_entity[(experiment_id, entity_id)].append(window_key)
+
+        windows_by_entity = defaultdict(list)
+
+        for entity_key, entity_window_keys in pending_by_entity.items():
+            experiment_id, entity_id = entity_key
+            entity_window_keys.sort(key=lambda key: key[1])  # ISO timestamp order
+
+            for window_key in entity_window_keys:
+                state = self.pending_windows[window_key]
+                window_data = state['window_data']
+
+                complete = self.aggregator.is_window_complete(window_data)
+                expired = force or ((now - state['first_seen']) * 1000 >= self.window_timeout_ms)
+
+                # Preserve order: stop when earliest pending window is still incomplete.
+                if not complete and not expired:
+                    break
+
+                if not complete:
+                    logger.warning(
+                        f"Window timeout for {window_key}; filling missing metrics "
+                        f"with strategy='{self.missing_metric_strategy}'"
+                    )
+                    window_data = self.aggregator.fill_missing_metrics(
+                        window_data,
+                        self.missing_metric_strategy
+                    )
+
+                _, window_ts, _ = window_key
+                window_idx = self.window_indices[entity_key]
+                self.window_indices[entity_key] += 1
+
+                windows_by_entity[entity_key].append({
+                    'window_data': window_data,
+                    'window_ts': window_ts,
+                    'window_idx': window_idx
+                })
+
+                del self.pending_windows[window_key]
+
+        # Apply delta conversion and segment building.
         for entity_key, entity_windows in windows_by_entity.items():
             experiment_id, entity_id = entity_key
 
-            # Sort by window index
             entity_windows.sort(key=lambda w: w['window_idx'])
 
-            # Convert to list of window dicts
             window_dicts = [w['window_data'] for w in entity_windows]
 
-            # Apply delta conversion
             converted_windows = self.delta_converter.convert_windows(
                 window_dicts,
                 experiment_id,
                 entity_id
             )
 
-            # Add to segment builder
             for i, window in enumerate(converted_windows):
                 window_ts = entity_windows[i]['window_ts']
                 window_idx = entity_windows[i]['window_idx']
@@ -172,9 +234,6 @@ class Windowizer:
                 # Emit segment if ready
                 if segment is not None:
                     self._emit_segment(segment)
-
-        # Clear batch
-        self.event_batch.clear()
 
     def _emit_segment(self, segment: Dict):
         """
@@ -218,6 +277,9 @@ class Windowizer:
                     # No message available, process any pending batch
                     if self.event_batch:
                         self._process_batch()
+                    elif self.pending_windows:
+                        # Flush timed-out windows even without new events.
+                        self._process_pending_windows(force=False)
 
                 # Commit periodically (every 10 messages)
                 if self.kafka.messages_delivered % 10 == 0 and self.kafka.messages_delivered > 0:
@@ -259,6 +321,11 @@ class Windowizer:
         if self.event_batch:
             logger.info("Processing remaining events...")
             self._process_batch()
+
+        # Flush any remaining pending windows.
+        if self.pending_windows:
+            logger.info("Flushing pending windows...")
+            self._process_pending_windows(force=True)
 
         # Flush incomplete segments (optional - may want to skip partial segments)
         # partial_segments = self.segment_builder.flush_incomplete_segments()
