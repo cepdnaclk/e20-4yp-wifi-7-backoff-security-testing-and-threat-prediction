@@ -11,31 +11,24 @@ This document provides complete context about the current state of the project. 
 |--------------|--------|-------------|
 | WP1 | ✅ Complete | Local dev setup, GitHub SSH |
 | WP2 | ✅ Complete | Containerlab skeleton with services |
-| WP3 | ✅ Complete | ns-3 container + Wi-Fi telemetry |
+| WP3 | ✅ Complete | ns-3 container + Wi-Fi 7 telemetry |
 | WP4 | ✅ Complete | Telemetry exporter (file → Kafka) |
 | WP5 | ✅ Complete | Harmonizer (Kafka → DB) |
-| WP6 | ✅ Complete | Grafana dashboards |
-| WP7 | ✅ Complete | One-command pipeline |
-| WP7.5 | ✅ Complete | Exporter reliability + MLO dashboard |
-| WP8 | 🔄 In Progress | GCN attack detection integration |
-| WP8 Phase 1 | ✅ Complete | Foundation (schemas, configs, model registry) |
-| WP8 Phase 2 | ✅ Complete | Windowizer implementation (Feb 10, 2026) |
-| WP8 Phase 3 | ✅ Complete | GCN detector implementation (Feb 10, 2026) |
-| WP8 Phase 4 | ✅ Complete | End-to-end testing (Feb 10, 2026) |
-| WP8 Phase 5 | ✅ Complete | Grafana dashboard (Feb 10, 2026) |
-| WP8 Phase 6 | ✅ Complete | Configuration alignment validation |
-| WP9 | 🔄 In Progress | GCN model retraining (pilot study) |
-| WP9 Pilot | 🔄 Running | 30-scenario balanced dataset (50-50) |
-| WP9 Full | 🔲 Next | 256-scenario full dataset |
-| WP10+ | 🔲 Future | Additional security features |
+| WP6 | ✅ Complete | Grafana provisioning-as-code |
+| WP7 | ✅ Complete | One-command pipeline (`make run-exp`) |
+| WP7.5 | ✅ Complete | Exporter reliability + MLO attack scenarios |
+| WP8 | ✅ Complete | GCN attack detection (Windowizer + GCN Detector) |
+| WP9 | ✅ Complete | GCN model v2.0.0 retraining (284 balanced scenarios) |
+| WP9.5 | ✅ Complete | Unified Grafana dashboard (38 panels, 3 variables) |
+| WP10 | ✅ Complete | Custom web dashboard (React 18 + FastAPI, port 8888) |
 
 ---
 
 ## Working Pipeline
 
-### Current Pipeline (WP7.5 Complete)
+### Current Pipeline (WP10 Complete — All Phases)
 ```
-ns-3 simulation run
+NS-3 Simulation (Wi-Fi 7 MLO)
         │
         ▼
 sim/ns3/artifacts/<EXP_ID>/telemetry.jsonl
@@ -44,50 +37,55 @@ sim/ns3/artifacts/<EXP_ID>/telemetry.jsonl
 Exporter (ns3_file_exporter)
         │
         ▼
-Redpanda (Kafka API) - topic: wifi7.telemetry.v0_1
+Redpanda (Kafka API) — topic: wifi7.telemetry.v0_1
         │
-        ▼
-Harmonizer
-        │
-        ▼
-TimescaleDB (public.metrics table)
-        │
-        ▼
-Grafana (http://localhost:3000)
-```
-
-### Future GCN Pipeline (WP8 - In Progress)
-```
-ns-3 simulation run
-        │
-        ▼
-Exporter → Kafka: wifi7.telemetry.v0_1
-        │                    │
-        ▼                    ▼
-   Harmonizer         Windowizer (Phase 2)
-        │                    │
-        ▼                    ▼
-   TimescaleDB        Kafka: wifi7.ml.windowed_features.v1
-        │                    │
-        ▼                    ▼
-   Grafana            GCN Detector (Phase 3)
-                             │
-                             ▼
-                      Predictions → DB + Kafka
-                             │
-                             ▼
-                      Grafana + Alerts (Phase 5)
+        ├──────────────────────────────┐
+        ▼                              ▼
+   Harmonizer                     Windowizer
+        │                    (256-window segments)
+        ▼                              │
+ TimescaleDB                           ▼
+ public.metrics               Kafka: wifi7.ml.windowed_features.v1
+        │                              │
+        │                              ▼
+        │                       GCN Detector v2.0.0
+        │                              │
+        │                              ▼
+        │                    TimescaleDB public.gcn_predictions
+        │                              │
+        └──────────────┬───────────────┘
+                       │
+          ┌────────────┴────────────┐
+          ▼                         ▼
+   Grafana :3000          Custom Dashboard :8888
+ (38-panel unified)    (real-time pipeline + analysis)
 ```
 
 ---
 
-## Running Services (Containerlab)
+## Running Services
+
+### Containerlab (clab-mgmt network)
 
 | Service | Container Name | Port | Purpose |
 |---------|---------------|------|---------|
 | UDR DB | `clab-ndt-wifi7-mlo-security-udr-db` | 5432 | TimescaleDB |
-| Grafana | `clab-ndt-wifi7-mlo-security-grafana` | 3000 | Dashboards |
+| Grafana | `clab-ndt-wifi7-mlo-security-grafana` | 3000 | Grafana dashboards |
 | Redpanda | `clab-ndt-wifi7-mlo-security-bus-redpanda` | 9092 | Kafka API |
+
+### Docker Compose pipeline (docker-compose.pipeline.yml)
+
+| Service | Container | Purpose |
+|---------|-----------|---------|
+| harmonizer | `ndt-pipeline-harmonizer` | Kafka → TimescaleDB |
+| windowizer | `ndt-pipeline-windowizer` | Telemetry → 256-window segments |
+| gcn-detector | `ndt-pipeline-gcn-detector` | GCN attack detection inference |
+
+### Custom Dashboard (docker-compose.dashboard.yml)
+
+| Service | Container | Port | Purpose |
+|---------|-----------|------|---------|
+| dashboard | `ndt-dashboard` | **8888** | FastAPI + React 18 custom dashboard |
 
 ---
 
@@ -122,6 +120,24 @@ make pipeline-up           # Start harmonizer in background
 make pipeline-down         # Stop harmonizer
 make pipeline-status       # Check status and logs
 make run-exp EXP_ID=...    # Run full experiment (ns-3 → export → ingest)
+```
+
+### GCN Pipeline (WP8)
+```bash
+make gcn-up                # Start windowizer + GCN detector
+make gcn-down              # Stop windowizer + GCN detector
+make gcn-status            # Check status and logs
+make run-mlo-exp EXP_ID=... SCENARIO=normal|positive|negative
+bash run_scenarios.sh      # Run all 3 scenarios
+```
+
+### Custom Dashboard (WP10)
+```bash
+make dashboard-build       # Build Docker image
+make dashboard-up          # Start on http://localhost:8888
+make dashboard-down        # Stop
+make dashboard-logs        # Follow logs
+make dashboard-status      # Status + last 20 log lines
 ```
 
 ### Verification
@@ -278,38 +294,56 @@ make run-mlo-exp EXP_ID=20260106-1400-mlo-attack-neg-42
 ```
 ndt-wifi7-mlo-security/
 ├── clab/
-│   ├── topo.yml                    # Containerlab topology
+│   ├── topo.yml                         # Containerlab topology
 │   └── configs/
 │       ├── grafana/
-│       │   ├── provisioning/       # Datasources, dashboard providers
-│       │   └── dashboards/         # Dashboard JSON files
-│       └── db/
-│           └── init.sql            # Database initialization
+│       │   ├── provisioning/            # Datasource + dashboard providers
+│       │   └── dashboards/
+│       │       └── ndt-unified.json     # Unified dashboard (38 panels)
+│       └── udr-db/initdb/
+│           ├── 001_schema.sql           # metrics table
+│           └── 003_gcn_schema.sql       # gcn_predictions table
 ├── sim/ns3/
-│   ├── scenario/                   # Run scripts
-│   ├── scratch/                    # ns-3 C++ code (if any)
-│   └── artifacts/                  # Experiment outputs (gitignored)
-│       └── <EXP_ID>/
-│           ├── meta.txt
-│           ├── telemetry.jsonl
-│           ├── ns3_stdout.log
-│           └── ns3_stderr.log
+│   ├── scenario/                        # Wi-Fi 7 MLO run scripts
+│   └── artifacts/<EXP_ID>/             # telemetry.jsonl, logs (gitignored)
 ├── telemetry/
-│   ├── exporters/
-│   │   └── ns3_file_exporter/      # File → Kafka exporter
-│   ├── contracts/                  # Schema definitions
-│   └── harmonizer/                 # Kafka → DB harmonizer
-├── docker/
-│   └── ns3/
-│       └── Dockerfile              # ns-3.46.1 image
-├── docs/
-│   └── adr/                        # Architecture decisions
-├── .claude/                        # Claude Code configuration
-│   ├── CLAUDE.md
-│   ├── agents/
-│   ├── commands/
-│   └── docs/context/
-├── .exporter_state/                # Exporter offset tracking (gitignored)
+│   ├── exporters/ns3_file_exporter/     # File → Kafka exporter
+│   ├── contracts/                       # Schema definitions
+│   └── harmonizer/                      # Kafka → TimescaleDB
+├── security/detector/windowizer/        # 256-window segmentation service
+│   ├── windowizer.py
+│   ├── delta_converter.py
+│   └── config.yaml
+├── twin/
+│   ├── gnn/
+│   │   ├── detector/                    # GCN inference service
+│   │   └── trainer/                     # Model training pipeline
+│   └── registry/gcn/
+│       ├── current -> v2.0.0            # Active version symlink
+│       ├── v1.0.0/                      # Baseline model
+│       └── v2.0.0/                      # Production model (balanced)
+│           ├── best_model.pt
+│           ├── scaler.json
+│           ├── config.yaml
+│           └── test_results.json
+├── dashboard/app/                       # Custom web dashboard (WP10)
+│   ├── Dockerfile                       # Multi-stage: Node 20 → Python 3.11
+│   ├── backend/                         # FastAPI + asyncpg
+│   │   ├── main.py
+│   │   ├── api/                         # REST endpoints
+│   │   ├── ws/pipeline.py               # WebSocket handler
+│   │   ├── db/queries.py                # Async SQL
+│   │   └── registry/reader.py           # Reads model registry
+│   └── frontend/                        # React 18 + Vite + Recharts
+│       └── src/
+│           ├── context/AppContext.tsx    # WebSocket + global state
+│           ├── sections/                # 6 dashboard sections
+│           └── components/              # layout, common, pipeline, charts
+├── docker-compose.pipeline.yml          # Harmonizer + Windowizer + GCN
+├── docker-compose.dashboard.yml         # Custom dashboard
+├── run_scenarios.sh                     # Batch: normal + pos + neg attacks
+├── training_data/                       # GCN training data (gitignored)
+├── docs/                                # All documentation
 └── Makefile
 ```
 
@@ -422,18 +456,26 @@ __pycache__/
 
 ---
 
-## Next Steps (WP8+)
+## Completed Features Summary (WP10)
 
-### WP8: Multi-Scenario Support
-- Scenario registry in `sim/ns3/scenarios/`
-- Add `scenario` field to telemetry
-- Grafana scenario selector
+All planned work packages are complete. The platform now provides:
 
-### WP9+: Security and AI
-- Feature store
-- Baseline detector
-- Policy engine
-- GNN digital twin
+| Feature | Location | How to access |
+|---------|----------|---------------|
+| Wi-Fi 7 MLO simulation | `sim/ns3/` | `make run-mlo-exp` |
+| Real-time telemetry pipeline | `telemetry/` | `make pipeline-up` |
+| GCN attack detection | `twin/gnn/` + `security/` | `make gcn-up` |
+| GCN model v2.0.0 | `twin/registry/gcn/v2.0.0/` | Active by default |
+| Unified Grafana dashboard | `clab/configs/grafana/dashboards/` | http://localhost:3000 |
+| Custom web dashboard | `dashboard/app/` | http://localhost:8888 |
+
+## Potential Next Steps (WP11+)
+
+- **Closed-loop actuation**: Feed GCN predictions back to ns-3 controller to suppress attacks
+- **Multi-STA scenarios**: Multiple simultaneous attacker and victim stations
+- **RL policy engine**: Replace rule-based responses with reinforcement learning
+- **Streaming training**: Continuous model updates as new attack patterns are seen
+- **REST API for external integrations**: Expose predictions + metrics to external systems
 
 ---
 
@@ -1841,7 +1883,95 @@ curl -s http://localhost:8080/status | python -m json.tool
 
 ---
 
-## WP9: GCN Model Retraining (🔄 In Progress - 2026-02-13)
+## WP10: Custom Web Dashboard (✅ Complete — 2026-02-28)
+
+**URL:** http://localhost:8888
+
+### Overview
+
+A full-stack custom web dashboard built with React 18 + FastAPI, served from Docker. Uses a **Soft UI / Neumorphism + Claymorphism** design system. Connects to TimescaleDB in real-time via WebSocket (2-second DB poll).
+
+### Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18, Vite, TailwindCSS, Recharts, Lucide icons |
+| Backend | FastAPI, asyncpg, uvicorn |
+| Real-time | WebSocket (`/ws/pipeline`) polling DB every 2s |
+| Build | Multi-stage Docker: Node 20 Alpine → Python 3.11-slim |
+| Port | **8888** |
+
+### 6 Dashboard Sections
+
+1. **Pipeline Monitor** — Live NS-3→Exporter→Kafka→Windowizer→GCN→DB stage status with per-stage counters and real-time activity feed of new GCN predictions
+2. **Experiment View** — Per-experiment KPI cards (segments, attack rate, confidence, inference time), selectable metric evolution chart, segment prediction table with confidence scores
+3. **Model Intelligence** — F1/accuracy/precision/recall/AUC bar chart, confusion matrix (from both live DB analysis and model test results), inference latency percentiles (min/p50/p95/max), model registry version list
+4. **Run History** — All experiments with pass/fail indicator, attack-rate bar chart for last 20 runs, sortable full table
+5. **Attack Analysis** — TP/TN/FP/FN breakdown cards, confidence histogram (normal vs attack), detection rate by experiment type donut chart
+6. **Network Health** — All 13 telemetry metrics (avg/min/max/σ) with trend arrows; click any metric card to expand its time-series chart
+
+### REST API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/health` | Health check + DB connectivity |
+| GET | `/api/experiments` | List all experiments with stats |
+| GET | `/api/experiments/{id}/summary` | Single experiment summary |
+| GET | `/api/experiments/{id}/predictions` | All segment predictions |
+| GET | `/api/experiments/{id}/metrics` | Metric time-series (downsampled) |
+| GET | `/api/models` | Model registry list |
+| GET | `/api/models/active` | Active model detail |
+| GET | `/api/models/inference-stats` | Inference latency stats |
+| GET | `/api/analysis/summary` | Cross-experiment TP/TN/FP/FN |
+| GET | `/api/analysis/confidence-histogram` | Confidence distribution |
+| GET | `/api/analysis/attack-by-type` | Detection rate by experiment type |
+| GET | `/api/pipeline/status` | Current pipeline stage states |
+| WS  | `/ws/pipeline` | Real-time pipeline events + status |
+
+### Commands
+
+```bash
+make dashboard-build    # Build image (ndt/dashboard:local)
+make dashboard-up       # Start dashboard (requires make up for clab-mgmt network)
+make dashboard-down     # Stop
+make dashboard-logs     # Follow logs
+make dashboard-status   # Status + last 20 log lines
+```
+
+### Implementation Files
+
+```
+dashboard/app/
+├── Dockerfile                     Multi-stage build
+├── .dockerignore
+├── backend/
+│   ├── main.py                    App factory, graceful DB startup
+│   ├── requirements.txt           fastapi, uvicorn, asyncpg, pydantic, PyYAML
+│   ├── db/connection.py           asyncpg pool (min=2, max=10)
+│   ├── db/queries.py              All async SQL queries
+│   ├── api/experiments.py         Experiment REST router
+│   ├── api/models.py              Model REST router
+│   ├── api/analysis.py            Analysis REST router
+│   ├── api/pipeline.py            Pipeline status router
+│   ├── ws/pipeline.py             WebSocket handler
+│   └── registry/reader.py         GCN registry filesystem reader
+└── frontend/
+    ├── package.json               React 18, Recharts, lucide-react
+    ├── vite.config.ts             Dev proxy → :8888, build → dist/
+    ├── tailwind.config.ts         Neumorphic shadow + colour tokens
+    └── src/
+        ├── index.css              CSS design system (CSS variables)
+        ├── App.tsx                Root layout + section router
+        ├── context/AppContext.tsx WebSocket + global state
+        ├── types/                 TypeScript interfaces
+        ├── hooks/                 useExperiments, useModels, useAnalysis
+        ├── components/            layout, common, pipeline, charts, model
+        └── sections/              PipelineSection … NetworkHealthSection
+```
+
+---
+
+## WP9: GCN Model Retraining (✅ Complete — 2026-02-28)
 
 ### Overview
 
@@ -1852,12 +1982,12 @@ curl -s http://localhost:8080/status | python -m json.tool
 
 **Solution**: Retrain model v2.0.0 on pipeline-generated data with balanced 50-50 distribution
 
-### Current Status: Pilot Study Running ✅
+### Current Status: ✅ Complete — Model v2.0.0 Deployed
 
-**Started**: 2026-02-13 (running for 1+ hour)
-**Phase**: Data Generation (30 scenarios)
-**Progress**: 0/30 scenarios complete (first scenario in progress)
-**ETA**: 6-7 more hours
+**Completed**: 2026-02-28
+**Pilot Study**: 30 scenarios generated, model trained and validated
+**Full Dataset**: 284 balanced scenarios (deployed as v2.0.0)
+**Active Model**: `twin/registry/gcn/current` → `v2.0.0`
 
 ### Pilot Study Design (30 Scenarios, 50-50 Balanced)
 
@@ -2032,10 +2162,14 @@ If pilot succeeds, generate **256 scenarios** for production model:
 
 ## Related Documentation
 
-- `WP8-GCN-INTEGRATION-PLAN.md` - Overall WP8 integration plan
-- `WP8-PHASE4-E2E-TEST-ANALYSIS.md` - Testing results and findings
-- `WP8-PHASE5-GRAFANA-DASHBOARD.md` - Complete dashboard documentation
-- `BLUEPRINT.md` - Project blueprint
-- `ALL-ADRS.md` - Architecture decisions
-- `QUICK-REFERENCE.md` - Command cheat sheet
+| File | Purpose |
+|------|---------|
+| `README.md` | Project overview, quick start, setup |
+| `QUICK-REFERENCE.md` | One-page command cheat sheet |
+| `BLUEPRINT.md` | Full implementation blueprint |
+| `ALL-ADRS.md` | All architecture decisions |
+| `WP8-SUMMARY.md` | GCN integration summary |
+| `WP8-GCN-INTEGRATION-PLAN.md` | WP8 integration plan |
+| `WP9-GCN-MODEL-RETRAINING-PLAN.md` | v2.0.0 retraining plan |
+| `../uiprojectsummary.md` | Custom dashboard implementation log |
 
