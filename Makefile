@@ -458,3 +458,42 @@ test-gcn-e2e:
 	@echo "  5. Validate predictions in DB"
 	@echo ""
 	@bash tests/gcn_e2e_test.sh || echo "Test script not yet implemented"
+
+# =============================================================================
+# WP9: Custom Web Dashboard
+# =============================================================================
+
+.PHONY: dashboard-build dashboard-up dashboard-down dashboard-logs dashboard-status dashboard-dev
+
+dashboard-build:
+	@echo "Building NDT Dashboard image..."
+	@docker build -t ndt/dashboard:local ./dashboard/app
+	@echo "Dashboard image built: ndt/dashboard:local"
+
+dashboard-up: dashboard-build
+	@echo "Starting NDT Dashboard on http://localhost:8888 ..."
+	@docker compose -f docker-compose.dashboard.yml up -d
+	@echo "Dashboard started. Open: http://localhost:8888"
+
+dashboard-down:
+	@echo "Stopping NDT Dashboard..."
+	@docker compose -f docker-compose.dashboard.yml down
+
+dashboard-logs:
+	@docker compose -f docker-compose.dashboard.yml logs -f dashboard
+
+dashboard-status:
+	@echo "Dashboard Status:"
+	@echo "================="
+	@docker compose -f docker-compose.dashboard.yml ps
+	@echo ""
+	@echo "Last 20 log lines:"
+	@docker compose -f docker-compose.dashboard.yml logs --tail=20 dashboard
+
+dashboard-dev:
+	@echo "Starting dashboard in DEV mode (hot-reload)..."
+	@echo "Backend: http://localhost:8888"
+	@echo "Frontend dev server: http://localhost:5173"
+	@echo ""
+	@echo "In a second terminal run: cd dashboard/app/frontend && npm run dev"
+	@cd dashboard/app/backend && uvicorn backend.main:app --host 0.0.0.0 --port 8888 --reload

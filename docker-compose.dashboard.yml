@@ -1,0 +1,42 @@
+# Docker Compose for NDT Custom Dashboard
+# WP9: Custom Web Dashboard
+#
+# Usage:
+#   make dashboard-build   # Build dashboard image
+#   make dashboard-up      # Start dashboard on port 8888
+#   make dashboard-down    # Stop dashboard
+#   make dashboard-logs    # View logs
+#
+# The dashboard connects to TimescaleDB on the clab-mgmt network.
+
+networks:
+  clab-mgmt:
+    external: true  # Created by containerlab
+
+services:
+  dashboard:
+    image: ndt/dashboard:local
+    container_name: ndt-dashboard
+    build:
+      context: ./dashboard/app
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - clab-mgmt
+    ports:
+      - "8888:8888"
+    environment:
+      PG_HOST: ${PG_HOST:-udr-db}
+      PG_PORT: ${PG_PORT:-5432}
+      PG_DB: ${PG_DB:-udr}
+      PG_USER: ${PG_USER:-udr}
+      PG_PASS: ${PG_PASS:-udr_pass}
+      REGISTRY_PATH: /registry
+    volumes:
+      # Mount GCN model registry read-only so the dashboard can list versions
+      - ./twin/registry/gcn:/registry:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

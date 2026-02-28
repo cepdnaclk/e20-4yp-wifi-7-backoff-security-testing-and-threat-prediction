@@ -1,0 +1,300 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design Tokens ─────────────────────────────────────────────────────────── */
+:root {
+  --color-bg: #e8edf2;
+  --color-card: #e8edf2;
+  --color-text: #2d3748;
+  --color-muted: #718096;
+  --color-subtle: #a0aec0;
+
+  --color-brand: #6392fa;
+  --color-brand-dark: #4a7bf0;
+  --color-brand-glow: rgba(99, 146, 250, 0.3);
+
+  --color-normal: #4caf87;
+  --color-normal-bg: rgba(76, 175, 135, 0.12);
+  --color-attack: #e85d6a;
+  --color-attack-bg: rgba(232, 93, 106, 0.12);
+  --color-warning: #f59e0b;
+  --color-warning-bg: rgba(245, 158, 11, 0.12);
+  --color-info: #6392fa;
+
+  /* Neumorphic shadows */
+  --shadow-raised: 8px 8px 16px rgba(166, 180, 200, 0.7),
+                   -8px -8px 16px rgba(255, 255, 255, 0.8);
+  --shadow-raised-sm: 4px 4px 8px rgba(166, 180, 200, 0.6),
+                      -4px -4px 8px rgba(255, 255, 255, 0.7);
+  --shadow-inset: inset 4px 4px 8px rgba(166, 180, 200, 0.6),
+                  inset -4px -4px 8px rgba(255, 255, 255, 0.7);
+  --shadow-hover: 10px 10px 20px rgba(166, 180, 200, 0.8),
+                  -10px -10px 20px rgba(255, 255, 255, 0.9);
+  --shadow-brand: 6px 6px 12px rgba(99, 146, 250, 0.3),
+                  -4px -4px 10px rgba(255, 255, 255, 0.8);
+
+  /* Border radius */
+  --radius-card: 20px;
+  --radius-btn: 14px;
+  --radius-pill: 999px;
+  --radius-sm: 10px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 400ms ease;
+}
+
+/* ── Base ──────────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Neumorphic Component Classes ─────────────────────────────────────────── */
+@layer components {
+  .neu-card {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-raised);
+    padding: 1.5rem;
+  }
+
+  .neu-card-sm {
+    background: var(--color-card);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-raised-sm);
+    padding: 1rem;
+  }
+
+  .neu-inset {
+    background: var(--color-card);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-inset);
+    padding: 0.75rem 1rem;
+  }
+
+  .neu-btn {
+    background: var(--color-card);
+    border-radius: var(--radius-btn);
+    box-shadow: var(--shadow-raised-sm);
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--color-text);
+    padding: 0.5rem 1.25rem;
+    transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .neu-btn:hover {
+    box-shadow: var(--shadow-hover);
+  }
+
+  .neu-btn:active {
+    box-shadow: var(--shadow-inset);
+    transform: scale(0.98);
+  }
+
+  .neu-btn-primary {
+    background: linear-gradient(135deg, var(--color-brand), var(--color-brand-dark));
+    color: white;
+    box-shadow: var(--shadow-brand);
+  }
+
+  .neu-btn-primary:hover {
+    box-shadow: 8px 8px 16px rgba(99, 146, 250, 0.4), -4px -4px 12px rgba(255, 255, 255, 0.7);
+  }
+
+  .neu-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: var(--radius-pill);
+    padding: 0.2rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .pill-normal {
+    background: var(--color-normal-bg);
+    color: var(--color-normal);
+  }
+
+  .pill-attack {
+    background: var(--color-attack-bg);
+    color: var(--color-attack);
+  }
+
+  .pill-warning {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+  }
+
+  .pill-brand {
+    background: rgba(99, 146, 250, 0.12);
+    color: var(--color-brand);
+  }
+
+  .pill-neutral {
+    background: rgba(113, 128, 150, 0.12);
+    color: var(--color-muted);
+  }
+
+  /* Sidebar nav items */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--color-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+    user-select: none;
+  }
+
+  .nav-item:hover {
+    color: var(--color-text);
+    background: rgba(99, 146, 250, 0.06);
+  }
+
+  .nav-item.active {
+    color: var(--color-brand);
+    box-shadow: var(--shadow-inset);
+  }
+
+  /* KPI card */
+  .kpi-card {
+    background: var(--color-card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-raised);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .kpi-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--color-text);
+    letter-spacing: -0.02em;
+  }
+
+  .kpi-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .kpi-delta {
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .kpi-delta.positive { color: var(--color-normal); }
+  .kpi-delta.negative { color: var(--color-attack); }
+  .kpi-delta.neutral  { color: var(--color-muted); }
+
+  /* Section title */
+  .section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-text);
+    letter-spacing: -0.01em;
+  }
+
+  .section-subtitle {
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    font-weight: 400;
+  }
+}
+
+/* ── Live pulse animation ─────────────────────────────────────────────────── */
+@keyframes pulse-ring {
+  0%   { transform: scale(1);   opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+.live-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.live-dot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: pulse-ring 1.4s ease-out infinite;
+  background: inherit;
+}
+
+.live-dot.green { background: var(--color-normal); }
+.live-dot.red   { background: var(--color-attack); }
+.live-dot.blue  { background: var(--color-brand); }
+.live-dot.amber { background: var(--color-warning); }
+.live-dot.grey  { background: var(--color-subtle); }
+
+/* ── Pipeline flow connector ─────────────────────────────────────────────── */
+@keyframes flow-dash {
+  to { stroke-dashoffset: -20; }
+}
+
+.flow-active {
+  animation: flow-dash 1s linear infinite;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(166, 180, 200, 0.6);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(113, 128, 150, 0.7); }
+
+/* ── Utility ──────────────────────────────────────────────────────────────── */
+.truncate-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--color-brand), #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
