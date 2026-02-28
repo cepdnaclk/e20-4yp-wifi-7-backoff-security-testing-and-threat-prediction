@@ -63,6 +63,21 @@
         "allValue": ".*",
         "current": {"text": "v2.0.0", "value": "v2.0.0", "selected": true},
         "options": []
+      },
+      {
+        "name": "experiment_selector",
+        "type": "query",
+        "label": "Experiment",
+        "description": "Select a specific experiment for the drill-down view at the bottom. Scoped to the active Run Selector.",
+        "datasource": {"type": "postgres", "uid": "udr_postgres"},
+        "query": "SELECT DISTINCT experiment_id FROM metrics WHERE experiment_id LIKE '${run_prefix}%' ORDER BY experiment_id",
+        "refresh": 2,
+        "sort": 1,
+        "includeAll": true,
+        "multi": false,
+        "allValue": "%",
+        "current": {"text": "All", "value": "$__all", "selected": true},
+        "options": []
       }
     ]
   },
@@ -215,7 +230,7 @@
         "refId": "A",
         "format": "table",
         "rawQuery": true,
-        "rawSql": "SELECT model_version as value FROM gcn_predictions WHERE experiment_id LIKE '${run_prefix}%' ORDER BY created_at DESC LIMIT 1"
+        "rawSql": "SELECT model_version as value FROM gcn_predictions ORDER BY created_at DESC LIMIT 1"
       }],
       "fieldConfig": {
         "defaults": {
@@ -223,7 +238,13 @@
           "mappings": []
         }
       },
-      "options": {"graphMode": "none", "colorMode": "background", "orientation": "auto", "textMode": "value"}
+      "options": {
+        "graphMode": "none",
+        "colorMode": "background",
+        "orientation": "auto",
+        "textMode": "value",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}
+      }
     },
     {
       "id": 7,
@@ -943,7 +964,7 @@
       "title": "Model Performance Summary",
       "description": "Key aggregated metrics for the selected run and model version",
       "datasource": {"type": "postgres", "uid": "udr_postgres"},
-      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 66},
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 66},
       "targets": [
         {
           "refId": "A",
@@ -1056,6 +1077,222 @@
         "footer": {"show": false}
       },
       "transformations": []
+    },
+    {
+      "id": 43,
+      "type": "text",
+      "title": "Model Summary — What These Numbers Mean",
+      "datasource": null,
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 70},
+      "options": {
+        "mode": "markdown",
+        "content": "**Total Segs** — Number of 256-window graph segments classified by the GCN. Each segment = ~25 seconds of simulation.\n\n**Avg Conf** — Model certainty (0–100%). High confidence for *both* Normal and Attack means the model is sure. Low confidence indicates ambiguous signal.\n\n**Avg Infer** — GCN inference latency per segment. Target: <20 ms. Spikes indicate CPU contention.\n\n**Model** — Active GCN version. `v2.0.0` = pipeline-trained on 284 balanced scenarios (normal + both attack types)."
+      },
+      "fieldConfig": {"defaults": {}, "overrides": []}
+    },
+    {
+      "id": 105,
+      "type": "row",
+      "title": "Drill-Down: Metric Evolution for Selected Experiment",
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 87},
+      "panels": []
+    },
+    {
+      "id": 60,
+      "type": "timeseries",
+      "title": "Avg Backoff Slots — Over Time",
+      "description": "How backoff slot count evolved during the selected experiment. Normal stays ~9-10. Positive attack rises to ~345. Negative attack drops to ~2.3. Use the 'Experiment' dropdown above to select one experiment.",
+      "datasource": {"type": "postgres", "uid": "udr_postgres"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 88},
+      "targets": [{
+        "refId": "A",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT ts AS \"time\", value, experiment_id FROM metrics WHERE $__timeFilter(ts) AND experiment_id LIKE '${experiment_selector}%' AND metric_name = 'avg_backoff_slots' AND entity_id = 'network' ORDER BY ts, experiment_id"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2, "fillOpacity": 15, "spanNulls": false, "showPoints": "auto"}
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*normal.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*attack-pos.*|.*positive.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*attack-neg.*|.*negative.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]
+          }
+        ]
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true, "calcs": ["mean", "min", "max"]},
+        "tooltip": {"mode": "multi"}
+      }
+    },
+    {
+      "id": 61,
+      "type": "timeseries",
+      "title": "Network Throughput (Mbps) — Over Time",
+      "description": "How throughput evolved during the simulation. Attack scenarios show a sustained drop (~31%) compared to normal baseline of ~304 Mbps.",
+      "datasource": {"type": "postgres", "uid": "udr_postgres"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 88},
+      "targets": [{
+        "refId": "A",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT ts AS \"time\", value, experiment_id FROM metrics WHERE $__timeFilter(ts) AND experiment_id LIKE '${experiment_selector}%' AND metric_name = 'net_throughput_mbps' AND entity_id = 'network' ORDER BY ts, experiment_id"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbps",
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2, "fillOpacity": 15, "spanNulls": false, "showPoints": "auto"}
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*normal.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*attack-pos.*|.*positive.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*attack-neg.*|.*negative.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]
+          }
+        ]
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true, "calcs": ["mean", "min", "max"]},
+        "tooltip": {"mode": "multi"}
+      }
+    },
+    {
+      "id": 62,
+      "type": "timeseries",
+      "title": "Packet Loss Ratio — Over Time",
+      "description": "Packet loss progression during the experiment. Normal ~2.5%. Attack-neg up to 48%. Attack-pos ~33%.",
+      "datasource": {"type": "postgres", "uid": "udr_postgres"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 96},
+      "targets": [{
+        "refId": "A",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT ts AS \"time\", value, experiment_id FROM metrics WHERE $__timeFilter(ts) AND experiment_id LIKE '${experiment_selector}%' AND metric_name = 'net_packet_loss_ratio' AND entity_id = 'network' ORDER BY ts, experiment_id"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2, "fillOpacity": 15, "spanNulls": false, "showPoints": "auto"}
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*normal.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*attack-pos.*|.*positive.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*attack-neg.*|.*negative.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]
+          }
+        ]
+      },
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi"}
+      }
+    },
+    {
+      "id": 63,
+      "type": "timeseries",
+      "title": "Average Packet Delay (ms) — Over Time",
+      "description": "Latency evolution during the experiment. Attack scenarios increase delay due to MAC contention and retransmissions.",
+      "datasource": {"type": "postgres", "uid": "udr_postgres"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 96},
+      "targets": [{
+        "refId": "A",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT ts AS \"time\", value, experiment_id FROM metrics WHERE $__timeFilter(ts) AND experiment_id LIKE '${experiment_selector}%' AND metric_name = 'net_avg_delay_ms' AND entity_id = 'network' ORDER BY ts, experiment_id"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2, "fillOpacity": 15, "spanNulls": false, "showPoints": "auto"}
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*normal.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*attack-pos.*|.*positive.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*attack-neg.*|.*negative.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]
+          }
+        ]
+      },
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi"}
+      }
+    },
+    {
+      "id": 64,
+      "type": "timeseries",
+      "title": "Channel Busy Ratio — Over Time",
+      "description": "Channel utilization across the simulation. Normal ~79%. Attack-neg overloads to ~89%. Attack-pos drops to ~41% (attacker monopolizes the channel, others back off).",
+      "datasource": {"type": "postgres", "uid": "udr_postgres"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 96},
+      "targets": [{
+        "refId": "A",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT ts AS \"time\", value, experiment_id FROM metrics WHERE $__timeFilter(ts) AND experiment_id LIKE '${experiment_selector}%' AND metric_name = 'channel_busy_ratio' AND entity_id = 'network' ORDER BY ts, experiment_id"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2, "fillOpacity": 15, "spanNulls": false, "showPoints": "auto"}
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": ".*normal.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*attack-pos.*|.*positive.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+          },
+          {
+            "matcher": {"id": "byRegexp", "options": ".*attack-neg.*|.*negative.*"},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]
+          }
+        ]
+      },
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi"}
+      }
     }
   ]
 }
