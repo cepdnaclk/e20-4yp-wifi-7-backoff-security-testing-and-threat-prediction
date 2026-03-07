@@ -19,11 +19,11 @@ export default function ModelSection() {
   const arch = active?.architecture
 
   const perfData = tr ? [
-    { name: 'F1 Score',   value: tr.f1_score,   color: 'var(--color-brand)' },
-    { name: 'Accuracy',   value: tr.accuracy,    color: 'var(--color-normal)' },
-    { name: 'Precision',  value: tr.precision,   color: 'var(--color-brand)' },
-    { name: 'Recall',     value: tr.recall,      color: 'var(--color-normal)' },
-    { name: 'AUC-ROC',    value: tr.auc_roc,     color: '#a78bfa' },
+    { name: 'F1 Score', value: tr.f1, color: 'var(--color-brand)' },
+    { name: 'Accuracy', value: tr.accuracy, color: 'var(--color-normal)' },
+    { name: 'Precision', value: tr.precision, color: 'var(--color-brand)' },
+    { name: 'Recall', value: tr.recall, color: 'var(--color-normal)' },
+    { name: 'AUC-ROC', value: tr.auc, color: '#a78bfa' },
   ] : []
 
   const cm = tr?.confusion_matrix
@@ -51,8 +51,8 @@ export default function ModelSection() {
             />
             <KpiCard
               label="F1 Score"
-              value={tr ? `${(tr.f1_score * 100).toFixed(1)}%` : '—'}
-              accent={tr && tr.f1_score > 0.9 ? 'var(--color-normal)' : 'var(--color-warning)'}
+              value={tr ? `${(tr.f1 * 100).toFixed(1)}%` : '—'}
+              accent={tr && tr.f1 > 0.9 ? 'var(--color-normal)' : 'var(--color-warning)'}
             />
             <KpiCard
               label="Avg Inference"
@@ -152,7 +152,7 @@ export default function ModelSection() {
                     </div>
                     {m.test_results && (
                       <span className="text-sm" style={{ color: 'var(--color-muted)' }}>
-                        F1: {(m.test_results.f1_score * 100).toFixed(1)}%
+                        F1: {(m.test_results.f1 * 100).toFixed(1)}%
                       </span>
                     )}
                   </div>

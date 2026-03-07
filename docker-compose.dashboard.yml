@@ -31,7 +31,7 @@ services:
       PG_DB: ${PG_DB:-udr}
       PG_USER: ${PG_USER:-udr}
       PG_PASS: ${PG_PASS:-udr_pass}
-      REGISTRY_PATH: /registry
+      GCN_REGISTRY_PATH: /registry
     volumes:
       # Mount GCN model registry read-only so the dashboard can list versions
       - ./twin/registry/gcn:/registry:ro
