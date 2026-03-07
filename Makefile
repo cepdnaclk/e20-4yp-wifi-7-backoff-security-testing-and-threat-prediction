@@ -33,7 +33,7 @@ ns3-run:
 	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make ns3-run EXP_ID=20251222-1835-baseline-42" && exit 1)
 	@docker run --rm -it \
 	  --user "$$(id -u):$$(id -g)" \
-	  -v "$(PWD)":/work \
+	  -v "$(CURDIR)":/work \
 	  $(NS3_IMAGE) \
 	  bash -lc "./sim/ns3/scenario/run_baseline.sh $(EXP_ID) 42"
 
@@ -44,7 +44,7 @@ ns3-run-example:
 	@test -n "$(EXP_ID)" || (echo "EXP_ID required" && exit 1)
 	@docker run --rm -it \
 	  --user "$$(id -u):$$(id -g)" \
-	  -v "$(PWD)":/work \
+	  -v "$(CURDIR)":/work \
 	  $(NS3_IMAGE) \
 	  bash -lc "./sim/ns3/scenario/run_wifi_example_and_export.sh $(EXP_ID) 42"
 
@@ -72,8 +72,8 @@ exporter-run:
 	@docker run --rm -it \
 	  --network clab-mgmt \
 	  --user "$$(id -u):$$(id -g)" \
-	  -v "$(PWD)/sim/ns3/artifacts:/work/sim/ns3/artifacts:ro" \
-	  -v "$(PWD)/.exporter_state:/state" \
+	  -v "$(CURDIR)/sim/ns3/artifacts:/work/sim/ns3/artifacts:ro" \
+	  -v "$(CURDIR)/.exporter_state:/state" \
 	  -e TELEMETRY_FILE="/work/sim/ns3/artifacts/$(EXP_ID)/telemetry.jsonl" \
 	  -e KAFKA_BROKERS="$(KAFKA_BROKERS)" \
 	  -e KAFKA_TOPIC="$(KAFKA_TOPIC)" \
@@ -170,7 +170,7 @@ run-mlo-normal:
 	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make run-mlo-normal EXP_ID=20260103-1400-mlo-normal-42" && exit 1)
 	@docker run --rm -it \
 	  --user "$$(id -u):$$(id -g)" \
-	  -v "$(PWD)":/work \
+	  -v "$(CURDIR)":/work \
 	  $(NS3_IMAGE) \
 	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) normal $(SEED)"
 
@@ -179,7 +179,7 @@ run-mlo-positive:
 	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make run-mlo-positive EXP_ID=20260103-1400-mlo-attack-pos-42" && exit 1)
 	@docker run --rm -it \
 	  --user "$$(id -u):$$(id -g)" \
-	  -v "$(PWD)":/work \
+	  -v "$(CURDIR)":/work \
 	  $(NS3_IMAGE) \
 	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) positive $(SEED)"
 
@@ -188,7 +188,7 @@ run-mlo-negative:
 	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make run-mlo-negative EXP_ID=20260103-1400-mlo-attack-neg-42" && exit 1)
 	@docker run --rm -it \
 	  --user "$$(id -u):$$(id -g)" \
-	  -v "$(PWD)":/work \
+	  -v "$(CURDIR)":/work \
 	  $(NS3_IMAGE) \
 	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) negative $(SEED)"
 
@@ -393,16 +393,16 @@ gcn-train:
 	@echo "Training new GCN model..."
 	@echo "Output: $(OUTPUT_DIR)"
 	@docker run --rm \
-		-v $(PWD)/twin/registry/gcn:/output \
-		-v $(PWD)/data:/data \
-		-v $(PWD)/twin/gnn/trainer/training.yaml:/config/training.yaml:ro \
+		-v $(CURDIR)/twin/registry/gcn:/output \
+		-v $(CURDIR)/data:/data \
+		-v $(CURDIR)/twin/gnn/trainer/training.yaml:/config/training.yaml:ro \
 		$(GCN_TRAINER_IMAGE)
 
 gcn-evaluate:
 	@test -n "$(MODEL)" || (echo "MODEL required. Example: make gcn-evaluate MODEL=v1.0.0" && exit 1)
 	@echo "Evaluating model $(MODEL)..."
 	@docker run --rm \
-		-v $(PWD)/twin/registry/gcn:/models \
+		-v $(CURDIR)/twin/registry/gcn:/models \
 		$(GCN_TRAINER_IMAGE) evaluate --model $(MODEL)
 
 gcn-deploy:
