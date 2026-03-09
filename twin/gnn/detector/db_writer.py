@@ -51,7 +51,6 @@ class DatabaseWriter:
         self.batch_size = batch_size
 
         self.connection = None
-        self.cursor = None
 
         # Buffer for batch inserts
         self.buffer = []
@@ -71,7 +70,7 @@ class DatabaseWriter:
                 user=self.user,
                 password=self.password
             )
-            self.cursor = self.connection.cursor()
+            self.connection.autocommit = False
 
             logger.info(f"Connected to database: {self.dbname}@{self.host}")
             return True
@@ -82,7 +81,7 @@ class DatabaseWriter:
 
     def write_predictions(self, predictions: List[Dict]) -> bool:
         """
-        Write predictions to database (buffered).
+        Write predictions to database.
 
         Args:
             predictions: List of prediction dicts
@@ -94,11 +93,11 @@ class DatabaseWriter:
             # Add to buffer
             self.buffer.extend(predictions)
 
-            # Flush if buffer is full
-            if len(self.buffer) >= self.batch_size:
-                return self.flush()
-
-            return True
+            # Always flush immediately for real-time streaming.
+            # Batching only makes sense for bulk inserts; in streaming mode
+            # we typically get 1 prediction at a time and would never reach
+            # batch_size, causing silent data loss.
+            return self.flush()
 
         except Exception as e:
             logger.error(f"Error writing predictions: {e}", exc_info=True)
@@ -135,7 +134,7 @@ class DatabaseWriter:
                     'gcn-detector'
                 ))
 
-            # Batch insert
+            # Batch insert using a fresh cursor for each flush
             insert_query = f"""
                 INSERT INTO {self.table} (
                     experiment_id, entity_id, segment_id,
@@ -149,7 +148,8 @@ class DatabaseWriter:
                 )
             """
 
-            execute_batch(self.cursor, insert_query, values, page_size=self.batch_size)
+            with self.connection.cursor() as cursor:
+                execute_batch(cursor, insert_query, values, page_size=self.batch_size)
             self.connection.commit()
 
             logger.info(f"Flushed {len(self.buffer)} predictions to database")
@@ -161,7 +161,10 @@ class DatabaseWriter:
 
         except Exception as e:
             logger.error(f"Error flushing predictions to database: {e}", exc_info=True)
-            self.connection.rollback()
+            try:
+                self.connection.rollback()
+            except Exception:
+                pass
             return False
 
     def close(self):
@@ -172,8 +175,6 @@ class DatabaseWriter:
             # Flush remaining predictions
             self.flush()
 
-            if self.cursor:
-                self.cursor.close()
             if self.connection:
                 self.connection.close()
 
@@ -193,8 +194,13 @@ class DatabaseWriter:
             if self.connection is None:
                 return False
 
-            # Execute simple query
-            self.cursor.execute("SELECT 1")
+            # Use connection.closed instead of executing a query
+            # to avoid leaving an open transaction (idle in transaction state).
+            if self.connection.closed != 0:
+                return False
+
+            # Poll with a lightweight no-op to detect broken pipes
+            self.connection.poll()
             return True
 
         except Exception as e:

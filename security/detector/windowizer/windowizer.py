@@ -235,6 +235,9 @@ class Windowizer:
                 if segment is not None:
                     self._emit_segment(segment)
 
+            # Flush after a batch of windows is processed to ensure delivery
+            self.kafka.flush()
+
     def _emit_segment(self, segment: Dict):
         """
         Emit segment to Kafka.

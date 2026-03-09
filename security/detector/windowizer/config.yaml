@@ -8,7 +8,7 @@ kafka:
   output_topic: wifi7.ml.windowed_features.v1
   brokers: bus-redpanda:9092
   consumer_group: windowizer-gcn-v1
-  auto_offset_reset: latest
+  auto_offset_reset: earliest
 
   # Consumer settings
   consumer:
