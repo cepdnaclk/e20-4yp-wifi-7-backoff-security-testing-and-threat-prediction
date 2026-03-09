@@ -1,0 +1,922 @@
+<style>
+.ppt-slide {
+    width: 1280px;
+    height: 720px;
+    padding: 50px;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Title Slide */
+.title-slide {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+.title-slide h1 {
+    font-size: 42px;
+    font-weight: 700;
+    margin-bottom: 30px;
+    line-height: 1.3;
+    max-width: 1000px;
+}
+
+.title-slide .subtitle {
+    font-size: 24px;
+    color: #e94560;
+    margin-bottom: 50px;
+    font-weight: 500;
+}
+
+.title-slide .authors {
+    font-size: 20px;
+    margin-bottom: 15px;
+}
+
+.title-slide .affiliation {
+    font-size: 16px;
+    color: #a0a0a0;
+}
+
+/* Content Slides */
+.content-slide {
+    background: #ffffff;
+}
+
+.content-slide h2 {
+    font-size: 36px;
+    color: #1a1a2e;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 4px solid #e94560;
+}
+
+.content-slide h3 {
+    font-size: 26px;
+    color: #0f3460;
+    margin: 20px 0 15px 0;
+}
+
+.content-slide p {
+    font-size: 22px;
+    line-height: 1.6;
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.content-slide ul {
+    font-size: 22px;
+    line-height: 1.8;
+    color: #333;
+    margin-left: 30px;
+}
+
+.content-slide li {
+    margin-bottom: 10px;
+}
+
+/* Two Column Layout */
+.two-column {
+    display: flex;
+    gap: 40px;
+    margin-top: 20px;
+}
+
+.two-column .column {
+    flex: 1;
+}
+
+/* Highlight Box */
+.highlight-box {
+    background: linear-gradient(135deg, #e94560 0%, #c73e54 100%);
+    color: white;
+    padding: 25px;
+    border-radius: 12px;
+    margin: 20px 0;
+}
+
+.highlight-box p {
+    color: white;
+    font-size: 20px;
+    margin: 0;
+}
+
+/* Info Box */
+.info-box {
+    background: #f0f4f8;
+    border-left: 5px solid #0f3460;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 0 8px 8px 0;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 25px;
+    margin-top: 30px;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: white;
+    padding: 25px;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.stat-card .number {
+    font-size: 42px;
+    font-weight: 700;
+    color: #e94560;
+}
+
+.stat-card .label {
+    font-size: 16px;
+    margin-top: 10px;
+    color: #a0a0a0;
+}
+
+/* Architecture Diagram */
+.arch-box {
+    background: #f8f9fa;
+    border: 2px solid #0f3460;
+    border-radius: 10px;
+    padding: 15px 20px;
+    text-align: center;
+    margin: 10px;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.arch-arrow {
+    text-align: center;
+    font-size: 28px;
+    color: #e94560;
+    margin: 5px 0;
+}
+
+/* Table Styles */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: 18px;
+}
+
+.data-table th {
+    background: #1a1a2e;
+    color: white;
+    padding: 12px;
+    text-align: left;
+}
+
+.data-table td {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+}
+
+.data-table tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+/* Section Divider */
+.section-slide {
+    background: linear-gradient(135deg, #e94560 0%, #c73e54 100%);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+.section-slide h2 {
+    font-size: 52px;
+    font-weight: 700;
+    margin: 0;
+    border: none;
+    color: white;
+}
+
+.section-slide .section-number {
+    font-size: 120px;
+    font-weight: 700;
+    opacity: 0.3;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Results Cards */
+.results-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 25px;
+    margin-top: 25px;
+}
+
+.result-card {
+    background: #fff;
+    border: 2px solid #0f3460;
+    border-radius: 12px;
+    padding: 25px;
+    text-align: center;
+}
+
+.result-card .metric {
+    font-size: 48px;
+    font-weight: 700;
+    color: #e94560;
+}
+
+.result-card .description {
+    font-size: 18px;
+    color: #666;
+    margin-top: 10px;
+}
+
+/* Footer */
+.slide-footer {
+    position: absolute;
+    bottom: 20px;
+    left: 50px;
+    right: 50px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    color: #999;
+}
+
+/* Code/Command styling */
+.code-block {
+    background: #1a1a2e;
+    color: #00ff88;
+    padding: 20px;
+    border-radius: 8px;
+    font-family: 'Consolas', monospace;
+    font-size: 16px;
+    margin: 15px 0;
+}
+
+/* Timeline */
+.timeline {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 40px;
+    position: relative;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: #e94560;
+}
+
+.timeline-item {
+    text-align: center;
+    width: 18%;
+    position: relative;
+}
+
+.timeline-item .dot {
+    width: 40px;
+    height: 40px;
+    background: #e94560;
+    border-radius: 50%;
+    margin: 0 auto 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    position: relative;
+    z-index: 1;
+}
+
+.timeline-item .label {
+    font-size: 14px;
+    color: #333;
+    font-weight: 500;
+}
+</style>
+
+<!-- Slide 1: Title -->
+<div class="ppt-slide title-slide">
+    <h1>A Network Digital Twin for Real-Time Backoff Manipulation Attack Detection in Wi-Fi 7 Multi-Link Operation</h1>
+    <div class="subtitle">Security-Focused Digital Twin Framework for Next-Generation Wireless Networks</div>
+    <div class="authors">P.D. Dissanayake, A.T.L. Nanayakkara, D.R.P. Nilupul</div>
+    <div class="affiliation">Department of Computer Engineering, University of Peradeniya, Sri Lanka</div>
+    <div class="authors" style="margin-top: 20px;">Dr. Upul Jayasinghe, Dr. Suneth Namal Karunarathna</div>
+    <div class="affiliation">Supervisors, Department of Computer Engineering</div>
+</div>
+
+<!-- Slide 2: Agenda -->
+<div class="ppt-slide content-slide">
+    <h2>Presentation Overview</h2>
+    <div class="two-column">
+        <div class="column">
+            <h3>Background & Problem</h3>
+            <ul>
+                <li>Wi-Fi 7 and MLO Introduction</li>
+                <li>Security Challenges</li>
+                <li>Research Gap Analysis</li>
+            </ul>
+            <h3>Proposed Solution</h3>
+            <ul>
+                <li>Digital Twin Architecture</li>
+                <li>GCN-Based Detection</li>
+                <li>Implementation Details</li>
+            </ul>
+        </div>
+        <div class="column">
+            <h3>Results & Contributions</h3>
+            <ul>
+                <li>Attack Impact Analysis</li>
+                <li>Model Performance</li>
+                <li>Key Findings</li>
+            </ul>
+            <h3>Future Directions</h3>
+            <ul>
+                <li>Limitations</li>
+                <li>Future Work</li>
+                <li>Conclusions</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 3: Wi-Fi 7 Context -->
+<div class="ppt-slide content-slide">
+    <h2>Wi-Fi 7: The Next Generation</h2>
+    <div class="two-column">
+        <div class="column">
+            <h3>Key Features</h3>
+            <ul>
+                <li><strong>320 MHz Channels</strong> - Ultra-wide bandwidth</li>
+                <li><strong>4096-QAM</strong> - Higher spectral efficiency</li>
+                <li><strong>Multi-Link Operation (MLO)</strong> - Simultaneous multi-band transmission</li>
+                <li><strong>Extremely High Throughput (EHT)</strong> - Next-gen performance</li>
+            </ul>
+        </div>
+        <div class="column">
+            <h3>Target Applications</h3>
+            <ul>
+                <li>Extended Reality (XR/AR/VR)</li>
+                <li>4K/8K Video Streaming</li>
+                <li>Cloud Gaming</li>
+                <li>Industrial IoT</li>
+                <li>Low-latency communications</li>
+            </ul>
+        </div>
+    </div>
+    <div class="highlight-box">
+        <p><strong>Challenge:</strong> Increased complexity introduces new attack surfaces that traditional security approaches cannot address</p>
+    </div>
+</div>
+
+<!-- Slide 4: Multi-Link Operation -->
+<div class="ppt-slide content-slide">
+    <h2>Multi-Link Operation (MLO)</h2>
+    <div class="two-column">
+        <div class="column">
+            <h3>What is MLO?</h3>
+            <p>A single Multi-Link Device (MLD) can transmit and receive simultaneously across multiple frequency bands:</p>
+            <ul>
+                <li>2.4 GHz band</li>
+                <li>5 GHz band</li>
+                <li>6 GHz band</li>
+            </ul>
+            <h3>Operating Modes</h3>
+            <ul>
+                <li><strong>STR Mode:</strong> Asynchronous, independent links</li>
+                <li><strong>Non-STR Mode:</strong> Synchronized links</li>
+            </ul>
+        </div>
+        <div class="column">
+            <h3>Link Types</h3>
+            <div class="info-box">
+                <strong>Primary Link:</strong> Anchor for association, authentication, and control traffic. Backward compatible with legacy devices.
+            </div>
+            <div class="info-box">
+                <strong>Secondary Links:</strong> Dedicated for MLDs to achieve bandwidth aggregation and latency reduction.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 5: The Security Problem -->
+<div class="ppt-slide content-slide">
+    <h2>The Security Challenge</h2>
+    <h3>Backoff Mechanism Vulnerabilities</h3>
+    <div class="two-column">
+        <div class="column">
+            <p>Wi-Fi 7's MLO introduces <strong>backoff compensation</strong> to synchronize multiple backoff counters:</p>
+            <ul>
+                <li>Improves efficiency across links</li>
+                <li>Creates "free ride" phenomena</li>
+                <li>Can lead to backoff overflow</li>
+            </ul>
+        </div>
+        <div class="column">
+            <div class="highlight-box">
+                <p><strong>Free Ride:</strong> A link transmits without completing its full backoff because another link's timer expired</p>
+            </div>
+            <div class="highlight-box" style="background: linear-gradient(135deg, #0f3460 0%, #1a1a2e 100%);">
+                <p><strong>Backoff Overflow:</strong> Repeated compensations cause counter errors, creating fairness challenges</p>
+            </div>
+        </div>
+    </div>
+    <p style="margin-top: 20px;"><strong>Critical Insight:</strong> These "performance anomalies" can be weaponized as sophisticated DoS attacks</p>
+</div>
+
+<!-- Slide 6: Research Gap -->
+<div class="ppt-slide content-slide">
+    <h2>Research Gap Analysis</h2>
+    <div class="two-column">
+        <div class="column">
+            <h3>Current Literature</h3>
+            <div class="info-box">
+                <strong>Performance Research (50+ papers)</strong><br>
+                Focus on throughput, latency optimization<br>
+                Treats anomalies as bugs to fix
+            </div>
+            <div class="info-box">
+                <strong>Security Research</strong><br>
+                Concentrates on legacy threats<br>
+                Evil Twin, WPA attacks, etc.
+            </div>
+        </div>
+        <div class="column">
+            <h3>The Missing Link</h3>
+            <div class="highlight-box">
+                <p><strong>No existing work addresses:</strong></p>
+                <ul style="color: white; margin-top: 10px;">
+                    <li>MLO-specific security threats</li>
+                    <li>State-based attack modeling</li>
+                    <li>Security-focused Digital Twins</li>
+                    <li>Real-time detection of backoff manipulation</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 7: Threat Model -->
+<div class="ppt-slide content-slide">
+    <h2>Threat Model: Backoff Manipulation Attack</h2>
+    <h3>Attack Vector</h3>
+    <div class="timeline">
+        <div class="timeline-item">
+            <div class="dot">1</div>
+            <div class="label">Attacker listens on busy link</div>
+        </div>
+        <div class="timeline-item">
+            <div class="dot">2</div>
+            <div class="label">Pauses own backoff</div>
+        </div>
+        <div class="timeline-item">
+            <div class="dot">3</div>
+            <div class="label">Counter expires on clear link</div>
+        </div>
+        <div class="timeline-item">
+            <div class="dot">4</div>
+            <div class="label">Induces backoff overflow</div>
+        </div>
+        <div class="timeline-item">
+            <div class="dot">5</div>
+            <div class="label">Gains perpetual "free rides"</div>
+        </div>
+    </div>
+    <div class="two-column" style="margin-top: 40px;">
+        <div class="column">
+            <div class="info-box">
+                <strong>Positive Attack (+5000 bias):</strong><br>
+                Artificially high backoff → Channel starvation → Throughput collapse
+            </div>
+        </div>
+        <div class="column">
+            <div class="info-box">
+                <strong>Negative Attack (-5000 bias):</strong><br>
+                Artificially low backoff → Aggressive access → Fairness degradation
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 8: Research Questions -->
+<div class="ppt-slide content-slide">
+    <h2>Research Questions</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div style="font-size: 18px; margin-bottom: 15px;">RQ1</div>
+            <div class="label">Can a GCN-based NDT predict network metrics with acceptable error?</div>
+        </div>
+        <div class="stat-card">
+            <div style="font-size: 18px; margin-bottom: 15px;">RQ2</div>
+            <div class="label">Can security analytics reliably detect MLO backoff manipulation?</div>
+        </div>
+        <div class="stat-card">
+            <div style="font-size: 18px; margin-bottom: 15px;">RQ3</div>
+            <div class="label">Can a policy engine restore fairness under attack? (Future)</div>
+        </div>
+    </div>
+    <div class="highlight-box" style="margin-top: 40px;">
+        <p><strong>RQ4:</strong> What is the end-to-end latency of the observe → decide → act → learn loop?</p>
+    </div>
+</div>
+
+<!-- Slide 9: System Architecture -->
+<div class="ppt-slide content-slide">
+    <h2>System Architecture</h2>
+    <div style="display: flex; flex-direction: column; align-items: center; margin-top: 20px;">
+        <div class="arch-box" style="width: 300px;">NS-3 Simulation Layer<br><span style="font-size: 14px;">Wi-Fi 7 MLO Scenarios</span></div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box" style="width: 250px;">Exporter<br><span style="font-size: 14px;">JSONL → Kafka</span></div>
+        <div class="arch-arrow">↓</div>
+        <div style="display: flex; gap: 30px;">
+            <div class="arch-box" style="width: 200px;">Harmonizer<br><span style="font-size: 14px;">→ TimescaleDB</span></div>
+            <div class="arch-box" style="width: 200px;">Windowizer<br><span style="font-size: 14px;">→ 256-sample segments</span></div>
+        </div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box" style="width: 300px; background: #e94560; color: white;">GCN Detector<br><span style="font-size: 14px;">Temporal Graph → Classification</span></div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box" style="width: 350px;">Visualization: Grafana + Custom Dashboard</div>
+    </div>
+</div>
+
+<!-- Slide 10: Components -->
+<div class="ppt-slide content-slide">
+    <h2>Key Components</h2>
+    <div class="two-column">
+        <div class="column">
+            <h3>Simulation Layer</h3>
+            <ul>
+                <li><strong>ns-3 v3.46.1</strong> - Discrete-event simulator</li>
+                <li>3 scenarios: Normal, Positive Attack, Negative Attack</li>
+                <li>Bias injection: 0, +5000, -5000</li>
+                <li>Window interval: 0.1 seconds</li>
+            </ul>
+            <h3>Telemetry Pipeline</h3>
+            <ul>
+                <li><strong>Exporter:</strong> Reads JSONL, publishes to Kafka</li>
+                <li><strong>Redpanda:</strong> Kafka-compatible message broker</li>
+                <li><strong>Harmonizer:</strong> Raw metrics → TimescaleDB</li>
+                <li><strong>Windowizer:</strong> 256-sample segmentation</li>
+            </ul>
+        </div>
+        <div class="column">
+            <h3>GCN Detector</h3>
+            <ul>
+                <li><strong>Model Loading:</strong> Hot-reload support</li>
+                <li><strong>Graph Construction:</strong> Temporal chain graph</li>
+                <li><strong>Feature Processing:</strong> Z-score normalization</li>
+                <li><strong>Inference:</strong> Binary classification + confidence</li>
+            </ul>
+            <h3>Storage & Visualization</h3>
+            <ul>
+                <li><strong>TimescaleDB:</strong> metrics + gcn_predictions</li>
+                <li><strong>Grafana:</strong> 38-panel unified dashboard</li>
+                <li><strong>Custom Dashboard:</strong> React + FastAPI + WebSocket</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 11: Data Collection -->
+<div class="ppt-slide content-slide">
+    <h2>Data Collection & Features</h2>
+    <h3>13 Key Network Metrics</h3>
+    <table class="data-table">
+        <tr>
+            <th>Network Layer (5)</th>
+            <th>MAC Layer (5)</th>
+            <th>PHY Layer (3)</th>
+        </tr>
+        <tr>
+            <td>Throughput, Delay, Jitter</td>
+            <td>TX, RX, ACK counts</td>
+            <td>PHY drops</td>
+        </tr>
+        <tr>
+            <td>Packet Loss, Active Flows</td>
+            <td>Retransmissions, Drops</td>
+            <td>Avg Backoff Slots</td>
+        </tr>
+        <tr>
+            <td></td>
+            <td></td>
+            <td>Channel Busy Ratio</td>
+        </tr>
+    </table>
+    <div class="two-column" style="margin-top: 25px;">
+        <div class="column">
+            <div class="info-box">
+                <strong>Feature Engineering:</strong><br>
+                Cumulative counters → Delta features<br>
+                Derived: retrans_rate, drop_rate, throughput_per_flow
+            </div>
+        </div>
+        <div class="column">
+            <div class="info-box">
+                <strong>Total Input Dimension:</strong> 16 features per window<br>
+                <strong>Segment Size:</strong> 256 windows (~25.6 seconds)
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 12: GCN Model -->
+<div class="ppt-slide content-slide">
+    <h2>GCN Model Architecture</h2>
+    <div class="two-column">
+        <div class="column">
+            <h3>Why GCN?</h3>
+            <ul>
+                <li>Captures temporal relationships in network data</li>
+                <li>Learns sequential patterns across time windows</li>
+                <li>Effective for detecting subtle attack signatures</li>
+                <li>Graph structure naturally represents network topology</li>
+            </ul>
+            <h3>Model Design</h3>
+            <ul>
+                <li><strong>2-layer GCN</strong> architecture</li>
+                <li><strong>Input:</strong> 256-window temporal graph</li>
+                <li><strong>Nodes:</strong> Time windows with 16 features</li>
+                <li><strong>Edges:</strong> Adjacent time connections (t ↔ t+1)</li>
+            </ul>
+        </div>
+        <div class="column">
+            <div class="highlight-box" style="background: linear-gradient(135deg, #0f3460 0%, #1a1a2e 100%);">
+                <p><strong>Output:</strong></p>
+                <ul style="color: white;">
+                    <li>Binary Classification</li>
+                    <li>0 = Normal Traffic</li>
+                    <li>1 = Attack Detected</li>
+                    <li>Confidence Score</li>
+                </ul>
+            </div>
+            <div class="info-box">
+                <strong>Training Dataset:</strong><br>
+                ~284 scenarios (50% normal, 50% attack)<br>
+                Pilot: 29 | Extended: 255
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 13: Model Evolution -->
+<div class="ppt-slide content-slide">
+    <h2>Model Evolution & Lessons</h2>
+    <div class="timeline">
+        <div class="timeline-item">
+            <div class="dot">v1</div>
+            <div class="label"><strong>v1.0.0</strong><br>Trained on external dataset<br>100% false positive rate</div>
+        </div>
+        <div class="timeline-item">
+            <div class="dot">v2</div>
+            <div class="label"><strong>v2.0.0</strong><br>Pipeline-generated data<br>Production deployment</div>
+        </div>
+        <div class="timeline-item">
+            <div class="dot">v3</div>
+            <div class="label"><strong>v2.1.0</strong><br>Further refinements<br>Based on observations</div>
+        </div>
+    </div>
+    <div class="highlight-box" style="margin-top: 50px;">
+        <p><strong>Key Lesson:</strong> Data distribution mismatch between training and deployment environments can cause complete model failure despite strong offline metrics</p>
+    </div>
+    <div class="info-box">
+        <strong>Engineering Fixes:</strong> Delta-field alignment, feature key updates, schema evolution, API naming consistency
+    </div>
+</div>
+
+<!-- Slide 14: Results - Attack Impact -->
+<div class="ppt-slide content-slide">
+    <h2>Results: Attack Impact Analysis</h2>
+    <table class="data-table">
+        <tr>
+            <th>Metric</th>
+            <th>Normal</th>
+            <th>Positive Attack (+5000)</th>
+            <th>Negative Attack (-5000)</th>
+        </tr>
+        <tr>
+            <td>Avg Backoff Slots</td>
+            <td>Baseline</td>
+            <td style="color: #e94560; font-weight: bold;">+285x increase</td>
+            <td style="color: #e94560; font-weight: bold;">-56% decrease</td>
+        </tr>
+        <tr>
+            <td>Attacker Throughput</td>
+            <td>Baseline</td>
+            <td style="color: #e94560; font-weight: bold;">-84% degradation</td>
+            <td>Significant increase</td>
+        </tr>
+        <tr>
+            <td>Network Throughput</td>
+            <td>Baseline</td>
+            <td>Severe degradation</td>
+            <td style="color: #e94560; font-weight: bold;">-44% degradation</td>
+        </tr>
+        <tr>
+            <td>Fairness Index</td>
+            <td>Stable</td>
+            <td style="color: #e94560; font-weight: bold;">Collapsed</td>
+            <td>Degraded</td>
+        </tr>
+    </table>
+    <div class="two-column" style="margin-top: 25px;">
+        <div class="column">
+            <div class="info-box">
+                <strong>Positive Attack:</strong> Starvation effect - attacker removes itself from contention
+            </div>
+        </div>
+        <div class="column">
+            <div class="info-box">
+                <strong>Negative Attack:</strong> Aggressive capture - attacker dominates medium access
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 15: Results - Model Performance -->
+<div class="ppt-slide content-slide">
+    <h2>Results: Model Performance</h2>
+    <div class="results-grid">
+        <div class="result-card">
+            <div class="metric">99.49%</div>
+            <div class="description">Accuracy</div>
+        </div>
+        <div class="result-card">
+            <div class="metric">98.86%</div>
+            <div class="description">Precision</div>
+        </div>
+        <div class="result-card">
+            <div class="metric">100%</div>
+            <div class="description">Recall</div>
+        </div>
+        <div class="result-card">
+            <div class="metric">99.43%</div>
+            <div class="description">F1-Score</div>
+        </div>
+    </div>
+    <div class="highlight-box" style="margin-top: 30px;">
+        <p><strong>Confusion Matrix:</strong> [[107, 1], [0, 87]] — Only 1 false positive, 0 false negatives</p>
+    </div>
+    <div class="info-box">
+        <strong>End-to-End Latency:</strong> &lt; 40 seconds (dominated by 25.6s windowing buffer)
+    </div>
+</div>
+
+<!-- Slide 16: Key Findings -->
+<div class="ppt-slide content-slide">
+    <h2>Key Findings</h2>
+    <div class="two-column">
+        <div class="column">
+            <div class="highlight-box">
+                <p><strong>Finding 1:</strong></p>
+                <p style="margin-top: 10px;">Backoff manipulation in Wi-Fi 7 MLO is a genuine security threat, not merely a performance anomaly</p>
+            </div>
+            <div class="highlight-box" style="background: linear-gradient(135deg, #0f3460 0%, #1a1a2e 100%);">
+                <p><strong>Finding 2:</strong></p>
+                <p style="margin-top: 10px;">GCN-based detection effectively identifies temporal patterns indicating adversarial behavior</p>
+            </div>
+        </div>
+        <div class="column">
+            <div class="highlight-box" style="background: linear-gradient(135deg, #16a085 0%, #27ae60 100%);">
+                <p><strong>Finding 3:</strong></p>
+                <p style="margin-top: 10px;">Security-focused NDT provides essential capabilities for studying attacks unsafe for production networks</p>
+            </div>
+            <div class="info-box">
+                <p><strong>Finding 4:</strong></p>
+                <p style="margin-top: 10px;">Training on pipeline-generated data is critical for deployment success</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 17: Limitations -->
+<div class="ppt-slide content-slide">
+    <h2>Limitations & Threats to Validity</h2>
+    <div class="two-column">
+        <div class="column">
+            <h3>Technical Limitations</h3>
+            <ul>
+                <li><strong>Simulation Fidelity:</strong> Results may not perfectly transfer to physical hardware due to RF interference, hardware variations</li>
+                <li><strong>Dataset Scale:</strong> 284 scenarios sufficient for proof-of-concept, but limited diversity</li>
+                <li><strong>Attack Scope:</strong> Focused on backoff manipulation only</li>
+            </ul>
+        </div>
+        <div class="column">
+            <h3>Evidence Quality Notes</h3>
+            <ul>
+                <li><strong>Documentation Drift:</strong> Some docs contain outdated status info</li>
+                <li><strong>Version Claims:</strong> Narrative describes behavior changes; artifacts may be duplicated</li>
+                <li><strong>Dataset Counts:</strong> Minor discrepancies (255 vs 257) in extended dataset</li>
+            </ul>
+        </div>
+    </div>
+    <div class="info-box" style="margin-top: 20px;">
+        <strong>Transparency:</strong> We report these limitations to maintain research integrity and guide future work
+    </div>
+</div>
+
+<!-- Slide 18: Future Work -->
+<div class="ppt-slide content-slide">
+    <h2>Future Directions</h2>
+    <div class="two-column">
+        <div class="column">
+            <h3>Expanded Research</h3>
+            <ul>
+                <li><strong>Attack Modeling:</strong> Packet steering exploitation, HARQ disruption, CSI spoofing</li>
+                <li><strong>Adversarial ML:</strong> Evasion and poisoning against detection system</li>
+                <li><strong>Closed-Loop Mitigation:</strong> Automated response mechanisms</li>
+            </ul>
+        </div>
+        <div class="column">
+            <h3>Deployment & Scale</h3>
+            <ul>
+                <li><strong>Physical Validation:</strong> Test on real Wi-Fi 7 hardware</li>
+                <li><strong>Scalability:</strong> Multi-AP, heterogeneous client populations</li>
+                <li><strong>Real-world Transfer:</strong> Assess deployment feasibility</li>
+            </ul>
+        </div>
+    </div>
+    <div class="highlight-box" style="margin-top: 25px;">
+        <p><strong>Vision:</strong> Security-focused Digital Twins will transition from analytical luxuries to essential defensive infrastructure for next-generation wireless networks</p>
+    </div>
+</div>
+
+<!-- Slide 19: Contributions -->
+<div class="ppt-slide content-slide">
+    <h2>Contributions</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div style="font-size: 60px; margin-bottom: 15px;">🎯</div>
+            <div class="label"><strong>Reframed MLO Anomalies</strong><br>as weaponizable security exploits</div>
+        </div>
+        <div class="stat-card">
+            <div style="font-size: 60px; margin-bottom: 15px;">🔧</div>
+            <div class="label"><strong>Complete Pipeline</strong><br>End-to-end NDT with GCN detection</div>
+        </div>
+        <div class="stat-card">
+            <div style="font-size: 60px; margin-bottom: 15px;">📊</div>
+            <div class="label"><strong>Validated Detection</strong><br>99.49% accuracy, &lt;40s latency</div>
+        </div>
+    </div>
+    <div class="info-box" style="margin-top: 40px; text-align: center;">
+        <strong>Open-Source Platform:</strong> Containerized, reproducible research environment for Wi-Fi 7 MLO security
+    </div>
+</div>
+
+<!-- Slide 20: Conclusion -->
+<div class="ppt-slide content-slide">
+    <h2>Conclusion</h2>
+    <div class="highlight-box" style="text-align: center; padding: 30px;">
+        <p style="font-size: 24px; line-height: 1.6;">The security of Wi-Fi 7 and future wireless systems is inherently tied to our capability to model and defend against <strong>protocol logic attacks</strong></p>
+    </div>
+    <div class="two-column" style="margin-top: 30px;">
+        <div class="column">
+            <h3>What We Achieved</h3>
+            <ul>
+                <li>First security-focused NDT for Wi-Fi 7 MLO</li>
+                <li>Demonstrated backoff manipulation as real threat</li>
+                <li>Validated GCN-based real-time detection</li>
+                <li>Established open research platform</li>
+            </ul>
+        </div>
+        <div class="column">
+            <h3>What's Next</h3>
+            <ul>
+                <li>Expand attack modeling scope</li>
+                <li>Physical hardware validation</li>
+                <li>Closed-loop mitigation systems</li>
+                <li>Industry adoption and standards</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Slide 21: Q&A -->
+<div class="ppt-slide title-slide">
+    <h1 style="font-size: 56px;">Thank You</h1>
+    <div class="subtitle" style="font-size: 28px; margin-top: 30px;">Questions & Discussion</div>
+    <div style="margin-top: 60px; font-size: 20px;">
+        <p><strong>Contact:</strong> {e20084, e20262, e20266}@eng.pdn.ac.lk</p>
+        <p style="margin-top: 15px;"><strong>Department of Computer Engineering</strong></p>
+        <p>University of Peradeniya, Sri Lanka</p>
+    </div>
+</div>

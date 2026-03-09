@@ -1,0 +1,488 @@
+\documentclass[12pt,a4paper]{article}
+
+% Required packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{float}
+\usepackage{url}
+\usepackage{listings}
+\usepackage{setspace}
+\usepackage{parskip}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+% Page geometry
+\geometry{a4paper, top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+
+% Line spacing
+\onehalfspacing
+
+% Header/Footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[C]{\small Digital Twins for Wi-Fi 7 Security Testing and Threat Prediction}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=darkgray,
+    urlcolor=blue,
+    bookmarks=true,
+    bookmarksnumbered=true,
+    pdftitle={A Network Digital Twin for Real-Time Backoff Manipulation Attack Detection in Wi-Fi 7 Multi-Link Operation},
+    pdfauthor={P.D. Dissanayake, A.T.L. Nanayakkara, D.R.P. Nilupul}
+}
+
+% Code listing style
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!10},
+    numbers=left,
+    numberstyle=\tiny\color{gray}
+}
+
+% Section formatting
+\titleformat{\section}{\Large\bfseries\centering}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\itshape}{\thesubsubsection}{0.5em}{}
+
+\begin{document}
+
+% Title Page
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+
+{\LARGE\bfseries A Network Digital Twin for Real-Time Backoff Manipulation Attack Detection in Wi-Fi 7 Multi-Link Operation\par}
+
+\vspace{2cm}
+
+{\large
+\textbf{P.D. Dissanayake (E/20/084)}\\
+\textbf{A.T.L. Nanayakkara (E/20/262)}\\
+\textbf{D.R.P. Nilupul (E/20/266)}\\[0.5cm]
+\textit{Department of Computer Engineering}\\
+\textit{University of Peradeniya, Sri Lanka}
+\par}
+
+\vspace{2cm}
+
+{\large
+\textbf{Supervisors:}\\
+Dr. Upul Jayasinghe (upuljm@eng.pdn.ac.lk)\\
+Dr. Suneth Namal Karunarathna (namal@eng.pdn.ac.lk)
+\par}
+
+\vspace{3cm}
+
+{\large
+\textbf{Final Year Research Project}\\
+Department of Computer Engineering\\
+University of Peradeniya\\[0.5cm]
+March 2026
+\par}
+
+\end{titlepage}
+
+% Abstract
+\newpage
+\section*{Abstract}
+\addcontentsline{toc}{section}{Abstract}
+
+The IEEE 802.11be (Wi-Fi 7) standard introduces Multi-Link Operation (MLO), a paradigm shift enabling simultaneous transmission across multiple frequency bands. While MLO promises dramatic performance improvements, its complex MAC-layer coordination logic---including packet steering, multi-link backoff compensation, and link allocation---creates a sophisticated attack surface that existing security frameworks cannot adequately address. This research presents a security-focused Network Digital Twin (NDT) framework specifically designed to detect backoff manipulation attacks in Wi-Fi 7 MLO networks. Our approach reframes documented performance anomalies, such as ``backoff overflow'' and ``free ride'' phenomena, as weaponizable security exploits. We implement a complete end-to-end pipeline comprising ns-3 simulation, Kafka-based telemetry streaming, TimescaleDB storage, and a Graph Convolutional Network (GCN) for real-time attack detection. The system processes 13 key network metrics across 256-sample temporal windows to identify adversarial behavior. Experimental results demonstrate that our GCN-based detector achieves 99.49\% accuracy, 98.86\% precision, and 100\% recall in distinguishing normal traffic from backoff manipulation attacks. Positive bias attacks (+5000) cause an 84\% throughput degradation and 285x backoff increase, while negative bias attacks (-5000) enable aggressive channel capture with 56\% backoff reduction. The end-to-end detection latency remains under 40 seconds, meeting near real-time requirements. This work establishes the first comprehensive, open-source platform for security-focused digital twin research in Wi-Fi 7 MLO environments, addressing a critical gap at the intersection of next-generation wireless protocols and AI-driven security analytics.
+
+\vspace{0.5cm}
+\noindent\textbf{Keywords:} Wi-Fi 7, Multi-Link Operation, Network Digital Twin, Backoff Manipulation, Graph Convolutional Network, Security, ns-3, Threat Detection, MAC-layer Attacks
+
+% Table of Contents
+\newpage
+\tableofcontents
+\newpage
+
+% Section I: Introduction
+\section{Introduction}
+
+\subsection{Background and Motivation}
+
+The evolution of wireless networking is driven by an insatiable demand for higher throughput and lower latency. Emerging applications such as Extended Reality (XR), Augmented Reality (AR), 4K/8K video streaming, cloud gaming, and industrial automation are pushing legacy Wi-Fi solutions to their operational limits. In response, the IEEE has developed the Wi-Fi 7 (802.11be) standard, representing a generational leap in performance referred to as Extremely High Throughput (EHT).
+
+Wi-Fi 7 introduces several transformative features that collectively enable multi-gigabit wireless connectivity. These include 320 MHz ultra-wide channels, 4096-QAM (4K-QAM) modulation for enhanced spectral efficiency, Multi-Link Operation (MLO) for simultaneous multi-band transmission, and improved Multi-User Multiple-Input Multiple-Output (MU-MIMO) capabilities. Among these innovations, MLO stands as the most disruptive architectural change, fundamentally altering how wireless devices access and utilize the radio spectrum.
+
+Multi-Link Operation enables a single Multi-Link Device (MLD) to transmit and receive simultaneously across multiple frequency bands---2.4 GHz, 5 GHz, and 6 GHz---as if they were a single aggregated communication pipe. Alternatively, links can operate independently in asynchronous mode, providing unprecedented flexibility in traffic management. This capability promises to dramatically improve throughput, reduce latency, and enhance reliability through link redundancy.
+
+However, this increased complexity introduces significant security challenges that existing frameworks are ill-equipped to address. The MAC-layer coordination logic governing MLO---including packet steering algorithms, multi-link backoff compensation mechanisms, and dynamic link allocation---creates a new attack surface that has not been systematically studied in the academic literature.
+
+\subsection{Problem Statement}
+
+The central problem addressed in this research is the detection and analysis of backoff manipulation attacks in Wi-Fi 7 MLO networks. The backoff mechanism, a fundamental component of Wi-Fi's Carrier Sense Multiple Access with Collision Avoidance (CSMA/CA) protocol, becomes significantly more complex in MLO environments due to the need for coordinating multiple simultaneous backoff counters across different links.
+
+Wi-Fi 7 implements backoff compensation to synchronize these counters, improving efficiency by allowing all links on a device to transmit simultaneously when conditions permit. However, this synchronization introduces the ``free ride'' phenomenon, where a link can transmit without completing its full backoff simply because another link's timer has expired.
+
+A sophisticated attacker can manipulate the backoff compensation rules to desynchronize internal counters, repeatedly inducing backoff overflow and gaining perpetual ``free rides.'' This allows the attacker to dominate channel access, collapse network fairness, and potentially cause Denial of Service (DoS) conditions for legitimate users.
+
+\subsection{Research Questions}
+
+This research is designed to answer the following questions:
+
+\begin{enumerate}[label=\textbf{RQ\arabic*:}]
+    \item Can a Graph Convolutional Network-based Network Digital Twin effectively model and predict network behavior in Wi-Fi 7 MLO scenarios with acceptable accuracy?
+    \item Can security analytics reliably detect MLO backoff manipulation patterns in near real-time?
+    \item What are the quantitative impacts of backoff manipulation attacks on network performance metrics including throughput, delay, jitter, and fairness?
+    \item What is the end-to-end latency of the observe-decide-act-learn loop in the proposed digital twin architecture?
+\end{enumerate}
+
+\subsection{Research Objectives}
+
+The primary objectives of this research are:
+
+\begin{enumerate}
+    \item \textbf{Model and Simulate MLO Backoff-Based Attacks:} Develop accurate simulation models in ns-3 that capture the behavior of backoff manipulation attacks under various bias conditions.
+    \item \textbf{Detect Abnormal MLO Backoff Behavior:} Design and implement machine learning-based detection mechanisms capable of identifying anomalous backoff patterns indicative of attacks.
+    \item \textbf{Design a Network Digital Twin Architecture:} Create a comprehensive digital twin framework integrating simulation, telemetry collection, AI-based analysis, and visualization components.
+    \item \textbf{Predict, Detect, and Mitigate Attacks:} Demonstrate the effectiveness of the proposed system in identifying backoff manipulation attacks and suggesting mitigation strategies.
+\end{enumerate}
+
+\subsection{Contribution and Significance}
+
+This research makes several significant contributions:
+
+\begin{itemize}
+    \item \textbf{Reframing Performance Anomalies as Security Threats:} We establish that documented MLO performance issues represent weaponizable security exploits rather than mere optimization challenges.
+    \item \textbf{First Security-Focused NDT for Wi-Fi 7:} We present the first comprehensive Network Digital Twin framework explicitly designed for security validation in Wi-Fi 7 MLO environments.
+    \item \textbf{Validated Detection System:} We demonstrate a GCN-based detection system achieving 99.49\% accuracy with sub-40-second latency.
+    \item \textbf{Open-Source Research Platform:} We provide a containerized, reproducible platform enabling continued research into protocol-logic attacks.
+\end{itemize}
+
+% Section II: Literature Review
+\section{Literature Review}
+
+\subsection{Wi-Fi 7 and Multi-Link Operation}
+
+The Wi-Fi 7 standard (IEEE 802.11be) represents the latest evolution in wireless networking technology. Carrascosa et al. (2022) conducted experimental studies demonstrating that MLO can significantly reduce latency while maintaining high throughput. Their work identified performance anomalies, including latency spikes and throughput degradation, which they treated as optimization challenges rather than security concerns.
+
+Garcia-Rodriguez et al. (2021) provided a comprehensive overview of Wi-Fi 7 features, emphasizing the potential for Extremely High Throughput. However, their analysis focused primarily on performance benefits, with security mentioned only in the context of legacy protections.
+
+Jung et al. (2025) analyzed coexistence between MLO NSTR-based Wi-Fi 7 and legacy devices, identifying potential interference patterns but stopping short of analyzing adversarial exploitation.
+
+\subsection{Backoff Mechanisms and Vulnerabilities}
+
+Murti and Yun (2022) specifically addressed the backoff overflow problem in IEEE 802.11be WLANs, identifying it as a fairness issue arising from repeated backoff compensation. They proposed clamping mechanisms as solutions, framing the problem purely as performance optimization.
+
+The concept of ``free rides'' in synchronized MLO operation has been documented in performance literature but not analyzed from a security perspective. Our work bridges this gap by demonstrating systematic exploitation possibilities.
+
+\subsection{Network Digital Twins}
+
+Almasan et al. (2022) provided a comprehensive survey of NDT context, enabling technologies, and opportunities, establishing foundational architecture for digital twin implementations. Their framework identifies key components including data collection layers, unified data repositories, simulation engines, and AI/ML workflows.
+
+Verdecchia et al. (2024) conducted a systematic review of Network Digital Twins, categorizing existing work by scope and objectives. Their analysis reveals that most NDT implementations focus on performance optimization, with security treated as a secondary concern.
+
+Ferriol-Galmés et al. (2022) demonstrated the use of Graph Neural Networks for building digital twins for network optimization, showing how GNNs can effectively model network topology and predict performance metrics.
+
+\subsection{Research Gap}
+
+Our literature analysis reveals a critical gap at the intersection of three domains: Wi-Fi 7/MLO technology, Network Digital Twins, and security threat prediction. No existing work addresses their integration for security purposes. This research addresses these gaps by presenting the first comprehensive, security-focused Network Digital Twin for Wi-Fi 7 MLO backoff manipulation attack detection.
+
+% Section III: Methodology
+\section{Methodology}
+
+\subsection{Research Design}
+
+This research follows an experimental design methodology, combining simulation-based attack modeling with machine learning-based detection. The approach involves four main phases: (1) Attack Modeling, (2) Data Collection, (3) Model Development, and (4) System Integration.
+
+\subsection{Threat Model}
+
+Our threat model considers a sophisticated attacker with knowledge of Wi-Fi 7 MLO protocol mechanics and ability to modify backoff counter values through bias injection.
+
+\textbf{Positive Bias Attack:} The attacker injects a positive bias (+100 to +10000), artificially inflating the contention window, causing self-starvation.
+
+\textbf{Negative Bias Attack:} The attacker injects a negative bias (-100 to -10000), artificially decreasing the contention window, enabling aggressive channel access.
+
+The attack formula is:
+\begin{equation}
+    \text{Backoff}_{\text{new}} = \text{Backoff}_{\text{current}} + \text{Bias}
+\end{equation}
+
+\subsection{System Architecture}
+
+The proposed Network Digital Twin architecture comprises five interconnected layers:
+
+\subsubsection{Simulation Layer}
+
+The simulation layer uses ns-3 (version 3.46.1) to generate realistic Wi-Fi 7 MLO network traffic. Three scenario types are implemented:
+
+\begin{itemize}
+    \item \textbf{Normal:} Baseline MLO behavior (Bias = 0)
+    \item \textbf{Positive Attack:} Bias values of +100, +200, +500, +1000, +2500, +5000, +10000
+    \item \textbf{Negative Attack:} Bias values of -100, -200, -500, -1000, -2500, -5000, -10000
+\end{itemize}
+
+\subsubsection{Telemetry Pipeline}
+
+\textbf{Exporter:} Reads JSONL telemetry files and publishes to Kafka topic \texttt{wifi7.telemetry.v0\_1}
+
+\textbf{Redpanda:} Kafka-compatible message broker for high-throughput streaming
+
+\textbf{Harmonizer:} Consumes telemetry, validates payloads, writes to TimescaleDB
+
+\textbf{Windowizer:} Aggregates metrics into 256-sample windows, converts counters to deltas
+
+\subsubsection{Detection Layer (Twin Layer)}
+
+The GCN-based detector processes windowed segments with hot-reload support, temporal chain graph construction, z-score normalization, and binary classification output.
+
+\subsubsection{Policy and Automation Layer}
+
+A policy engine proposes mitigation strategies based on detected attacks, with future RL agent integration planned.
+
+\subsubsection{Visualization Layer}
+
+Grafana dashboards and a custom React/FastAPI web interface provide real-time monitoring.
+
+\subsection{Data Collection and Features}
+
+The telemetry contract captures 13 key network metrics across three layers, as shown in Table~\ref{tab:metrics}.
+
+\begin{table}[htbp]
+\centering
+\caption{Network Metrics Collected}
+\label{tab:metrics}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Layer} & \textbf{Metrics} & \textbf{Description} \\
+\midrule
+\multirow{5}{*}{Network} & net\_throughput\_mbps & Aggregate throughput \\
+ & net\_avg\_delay\_ms & Average end-to-end delay \\
+ & net\_avg\_jitter\_ms & Delay variation \\
+ & net\_packet\_loss\_ratio & Packet loss percentage \\
+ & net\_active\_flows & Number of active flows \\
+\midrule
+\multirow{5}{*}{MAC} & mac\_total\_tx & Total transmissions \\
+ & mac\_total\_rx & Total receptions \\
+ & mac\_total\_ack & Acknowledgment count \\
+ & mac\_total\_retrans & Retransmission count \\
+ & mac\_drop\_count & MAC-level drops \\
+\midrule
+\multirow{3}{*}{PHY} & phy\_drop\_count & PHY-level drops \\
+ & avg\_backoff\_slots & Average backoff slots \\
+ & channel\_busy\_ratio & Channel utilization \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Feature engineering results in 16 total input features after delta conversion and derived metric computation.
+
+\subsection{GCN Model Architecture}
+
+We employ a 2-layer Graph Convolutional Network:
+
+\begin{itemize}
+    \item \textbf{Input:} Temporal graph from 256 consecutive windows, 16 features per node
+    \item \textbf{Graph Structure:} Chain graph with edges connecting adjacent time windows
+    \item \textbf{Output:} Binary classification (0=Normal, 1=Attack) with confidence score
+\end{itemize}
+
+\subsection{Dataset Construction}
+
+Table~\ref{tab:dataset} shows the dataset composition.
+
+\begin{table}[htbp]
+\centering
+\caption{Dataset Composition}
+\label{tab:dataset}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Dataset} & \textbf{Normal} & \textbf{Positive} & \textbf{Negative} & \textbf{Total} \\
+\midrule
+Pilot & 14 & 8 & 7 & 29 \\
+Extended & 123 & 68-70 & 64 & 255-257 \\
+\midrule
+\textbf{Combined} & \textbf{137} & \textbf{76-78} & \textbf{71} & \textbf{$\sim$284} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Model Training and Validation}
+
+The model underwent iterative development:
+
+\textbf{v1.0.0:} Trained on external dataset; failed in production (100\% false positive rate).
+
+\textbf{v2.0.0:} Retrained on pipeline-generated data; achieved production-ready performance.
+
+\textbf{v2.1.0:} Refined with improved generalization.
+
+% Section IV: Results
+\section{Results and Analysis}
+
+\subsection{Attack Impact Analysis}
+
+Table~\ref{tab:attack} summarizes the observed effects of backoff manipulation attacks.
+
+\begin{table}[htbp]
+\centering
+\caption{Attack Impact on Network Performance}
+\label{tab:attack}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Metric} & \textbf{Normal} & \textbf{Positive (+5000)} & \textbf{Negative (-5000)} \\
+\midrule
+Avg Backoff Slots & Baseline & +285x & -56\% \\
+Attacker Throughput & Baseline & -84\% & Increased \\
+Network Throughput & Baseline & Severe & -44\% \\
+Packet Loss & Baseline & Increased & Increased \\
+Jitter & Stable & Increased & Increased \\
+Fairness Index & Stable & Collapsed & Degraded \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Model Performance Metrics}
+
+Table~\ref{tab:performance} shows the GCN detector performance.
+
+\begin{table}[htbp]
+\centering
+\caption{GCN Model Performance}
+\label{tab:performance}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Metric} & \textbf{Value} & \textbf{Interpretation} \\
+\midrule
+Accuracy & 99.49\% & Overall correct classification \\
+Precision & 98.86\% & True positives / Predicted positives \\
+Recall & 100\% & True positives / Actual positives \\
+F1-Score & 99.43\% & Harmonic mean \\
+AUC & 100\% & Area under ROC curve \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The confusion matrix [[107, 1], [0, 87]] indicates excellent separation with only one false positive.
+
+\subsection{End-to-End Latency}
+
+The total latency from event generation to prediction is under 40 seconds, dominated by the 25.6-second windowing buffer (256 windows at 0.1s intervals).
+
+% Section V: Discussion
+\section{Discussion}
+
+\subsection{Key Findings}
+
+Our research validates several critical hypotheses:
+
+\begin{enumerate}
+    \item \textbf{Backoff Manipulation as Security Threat:} Experimental results demonstrate that backoff manipulation represents a genuine security threat, not merely a performance anomaly.
+    \item \textbf{GCN Effectiveness:} The GCN-based detection approach proves highly effective, achieving near-perfect detection accuracy.
+    \item \textbf{NDT Value for Security:} A security-focused NDT provides essential capabilities for studying MLO attacks that cannot be safely conducted in production networks.
+\end{enumerate}
+
+\subsection{Iterative Development Insights}
+
+The development trajectory revealed important lessons:
+
+\textbf{Data Distribution Criticality:} The v1.0.0 model failed due to training-deployment distribution mismatch, underscoring the importance of pipeline-generated training data.
+
+\textbf{Feature Alignment:} Early integration revealed field-name mismatches, highlighting the need for rigorous data contract validation.
+
+\textbf{Schema Evolution:} The database schema evolved through multiple iterations, demonstrating the need for flexible architectures.
+
+\subsection{Implications for Practice}
+
+\textbf{For Network Operators:} The demonstrated attack vectors highlight the need for MLO-specific security monitoring.
+
+\textbf{For Standards Bodies:} Wi-Fi 7 specifications should incorporate stronger safeguards against backoff manipulation.
+
+\textbf{For Security Vendors:} The GCN-based approach provides a template for next-generation wireless security products.
+
+% Section VI: Limitations
+\section{Limitations and Future Work}
+
+\subsection{Documented Limitations}
+
+\begin{itemize}
+    \item \textbf{Simulation Fidelity:} Results may not perfectly transfer to physical hardware.
+    \item \textbf{Dataset Scale:} 284 scenarios sufficient for proof-of-concept but limited diversity.
+    \item \textbf{Attack Scope:} Current implementation focuses on backoff manipulation.
+    \item \textbf{Physical Validation:} Simulation-based results; hardware validation is future work.
+\end{itemize}
+
+\subsection{Future Directions}
+
+\begin{itemize}
+    \item \textbf{Expanded Attack Modeling:} Implementation of packet steering, HARQ, and CSI spoofing attacks.
+    \item \textbf{Adversarial ML:} Study of evasion and poisoning strategies.
+    \item \textbf{Closed-Loop Mitigation:} Automated response mechanisms.
+    \item \textbf{Physical Deployment:} Validation on real Wi-Fi 7 hardware.
+    \item \textbf{Federated Learning:} Distributed threat intelligence across NDT deployments.
+\end{itemize}
+
+% Section VII: Conclusion
+\section{Conclusion}
+
+\subsection{Summary of Contributions}
+
+This research has presented a comprehensive Network Digital Twin framework for real-time detection of backoff manipulation attacks in Wi-Fi 7 MLO networks:
+
+\begin{enumerate}
+    \item \textbf{Security Reframing:} Established that MLO performance anomalies represent weaponizable security exploits.
+    \item \textbf{Complete System:} Implemented and validated a complete pipeline achieving 99.49\% accuracy.
+    \item \textbf{Research Platform:} Provided an open-source platform enabling reproducible research.
+    \item \textbf{Threat Matrix:} Identified and categorized a comprehensive set of MLO-specific threats.
+\end{enumerate}
+
+\subsection{Final Remarks}
+
+The security of Wi-Fi 7 and future wireless systems is inherently tied to our capability to model and defend against protocol logic attacks. The MLO exploits presented represent a new category of threats targeting coordination mechanisms rather than cryptographic weaknesses. As wireless networks evolve, security-focused Digital Twins will transition from analytical luxuries to essential defensive infrastructure. This work establishes a foundation for continued research into this critical emerging domain.
+
+% Acknowledgments
+\section*{Acknowledgments}
+\addcontentsline{toc}{section}{Acknowledgments}
+
+This research was conducted at the Department of Computer Engineering, University of Peradeniya, Sri Lanka. We express our sincere gratitude to our supervisors, Dr. Upul Jayasinghe and Dr. Suneth Namal Karunarathna, for their guidance and support. We acknowledge the contributions of the open-source ns-3 community and the various projects that form the foundation of our implementation.
+
+% References
+\newpage
+\section*{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{enumerate}[label={[\arabic*]}]
+    \item S. S. Murad et al., ``Introduction to Wi-Fi 7: A Review of History, Applications, Challenges,'' \textit{Mesopotamian Journal of Computer Science}, vol. 2024, pp. 110--121, 2024.
+    
+    \item M. Carrascosa et al., ``An experimental study of latency for IEEE 802.11be multi-link operation,'' in \textit{IEEE ICC}, 2022.
+    
+    \item A. Garcia-Rodriguez et al., ``IEEE 802.11be: Wi-Fi 7 strikes back,'' \textit{IEEE Communications Magazine}, 2021.
+    
+    \item M. Carrascosa-Zamacois et al., ``Wi-Fi Multi-Link Operation: An Experimental Study,'' \textit{IEEE/ACM Transactions on Networking}, vol. 32, no. 1, pp. 308--322, Feb. 2024.
+    
+    \item W. Murti and J. H. Yun, ``Multilink Operation in IEEE 802.11be: Backoff Overflow Problem and Solutions,'' \textit{Sensors}, vol. 22, no. 9, p. 3501, May 2022.
+    
+    \item G. Cena et al., ``Packet Steering Mechanisms for MLO in Wi-Fi 7,'' in \textit{IEEE ETFA}, Nov. 2024.
+    
+    \item P. Almasan et al., ``Network Digital Twin: Context, Enabling Technologies, and Opportunities,'' \textit{IEEE Communications Magazine}, vol. 60, no. 11, pp. 22--27, Nov. 2022.
+    
+    \item R. Verdecchia et al., ``Network Digital Twins: A Systematic Review,'' \textit{IEEE Access}, vol. 12, pp. 145400--145416, 2024.
+    
+    \item M. Ferriol-Galmés et al., ``Building a Digital Twin for network optimization using Graph Neural Networks,'' \textit{Computer Networks}, vol. 217, p. 109329, Nov. 2022.
+    
+    \item Y. Shen et al., ``Graph Neural Networks for Wireless Communications: From Theory to Practice,'' \textit{IEEE Transactions on Wireless Communications}, vol. 22, no. 5, pp. 3554--3569, May 2023.
+    
+    \item A. Gupta and R. K. Jha, ``Security threats of wireless networks: a survey,'' in \textit{ICCCA}, 2015, pp. 389--395.
+    
+    \item E. N. Almeida et al., ``Machine learning based propagation loss module for enabling digital twins of wireless networks in ns-3,'' in \textit{Proceedings of the 2022 Workshop on ns-3}, Jun. 2022, pp. 17--24.
+\end{enumerate}
+
+\end{document}
