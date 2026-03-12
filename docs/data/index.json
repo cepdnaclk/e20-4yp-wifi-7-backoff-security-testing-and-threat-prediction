@@ -1,34 +1,32 @@
 {
-    "team": [
-        {
-            "name": "Dissanayake P.D.",
-            "email": "e20084@eng.pdn.ac.lk",
-            "eNumber": "E/20/084"
-        },
-        {
-            "name": "Nanayakkara A.T.L.",
-            "email": "e20262@eng.pdn.ac.lk",
-            "eNumber": "E/20/262"
-        },
-        {
-            "name": "Nilupul D.R.P.",
-            "email": "e20266@eng.pdn.ac.lk",
-            "eNumber": "E/20/266"
-        }
-    ],
-    "supervisors": [
-        {
-            "name": "Dr. Upul Jayasinghe",
-            "email": "upuljm@eng.pdn.ac.lk"
-        },
-        {
-            "name": "Dr. Suneth Namal",
-            "email": "namal@eng.pdn.ac.lk"
-        }
-    ],
-    "tags": [
-        "Final Year Projects"
-    ],
-    "image": "cover_page.png",
-    "thumbnail": "thumbnail.jpg"
+  "team": [
+    {
+      "name": "Dissanayake P.D.",
+      "email": "e20084@eng.pdn.ac.lk",
+      "eNumber": "E/20/084"
+    },
+    {
+      "name": "Nanayakkara A.T.L.",
+      "email": "e20262@eng.pdn.ac.lk",
+      "eNumber": "E/20/262"
+    },
+    {
+      "name": "Nilupul D.R.P.",
+      "email": "e20266@eng.pdn.ac.lk",
+      "eNumber": "E/20/266"
+    }
+  ],
+  "supervisors": [
+    {
+      "name": "Dr. Upul Jayasinghe",
+      "email": "upuljm@eng.pdn.ac.lk"
+    },
+    {
+      "name": "Dr. Suneth Namal",
+      "email": "namal@eng.pdn.ac.lk"
+    }
+  ],
+  "tags": [
+    "Final Year Projects"
+  ]
 }
