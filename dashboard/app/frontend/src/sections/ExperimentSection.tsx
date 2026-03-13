@@ -10,14 +10,9 @@ import { useExperiments, useExperimentSummary, useExperimentPredictions, useMetr
 import type { Experiment } from '../types/experiments'
 
 const METRIC_OPTIONS = [
-  // Network / QoS
   'avg_backoff_slots', 'net_throughput_mbps', 'net_packet_loss_ratio',
   'net_avg_delay_ms',  'net_avg_jitter_ms',   'net_active_flows',
   'channel_busy_ratio',
-  // MAC layer
-  'mac_total_tx', 'mac_total_rx', 'mac_total_ack', 'mac_total_retrans', 'mac_drop_count',
-  // PHY layer
-  'phy_drop_count',
 ]
 
 const METRIC_COLORS: Record<string, string> = {
@@ -28,12 +23,6 @@ const METRIC_COLORS: Record<string, string> = {
   net_avg_jitter_ms:     '#fb923c',
   net_active_flows:      '#0ea5e9',
   channel_busy_ratio:    '#a78bfa',
-  mac_total_tx:          '#10b981',
-  mac_total_rx:          '#14b8a6',
-  mac_total_ack:         '#22d3ee',
-  mac_total_retrans:     '#f59e0b',
-  mac_drop_count:        '#ef4444',
-  phy_drop_count:        '#dc2626',
 }
 
 export default function ExperimentSection() {
