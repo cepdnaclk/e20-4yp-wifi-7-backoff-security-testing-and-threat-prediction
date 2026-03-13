@@ -171,48 +171,56 @@ run-exp:
 
 .PHONY: run-mlo-normal run-mlo-positive run-mlo-negative run-mlo-exp run-mlo-exp-stream
 
-SEED    ?= 42
-SIM_TIME ?= 50.0
-NAP     ?= 1
-NSTA    ?= 2
-NCPU    ?= $(shell nproc)
+SEED       ?= 42
+SIM_TIME   ?= 50.0
+NAP        ?= 1
+NSTA       ?= 2
+NCPU       ?= $(shell nproc)
+V3_COLLECT ?=
+V3_DATA_DIR ?= twin/gnn/training_data/v3
 
 # Run MLO normal baseline scenario (no attack)
 run-mlo-normal:
 	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make run-mlo-normal EXP_ID=20260103-1400-mlo-normal-42" && exit 1)
-	@docker run --rm -it \
+	@docker run --rm $(if $(INTERACTIVE),-it,) \
 	  --user "$$(id -u):$$(id -g)" \
 	  -v "$(CURDIR)":/work \
 	  -e NAP="$(NAP)" \
 	  -e NSTA="$(NSTA)" \
 	  -e SEED="$(SEED)" \
 	  -e SIM_TIME="$(SIM_TIME)" \
+	  -e V3_COLLECT="$(V3_COLLECT)" \
+	  -e V3_DATA_DIR="/work/$(V3_DATA_DIR)" \
 	  $(NS3_IMAGE) \
 	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) normal"
 
 # Run MLO positive bias attack scenario
 run-mlo-positive:
 	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make run-mlo-positive EXP_ID=20260103-1400-mlo-attack-pos-42" && exit 1)
-	@docker run --rm -it \
+	@docker run --rm $(if $(INTERACTIVE),-it,) \
 	  --user "$$(id -u):$$(id -g)" \
 	  -v "$(CURDIR)":/work \
 	  -e NAP="$(NAP)" \
 	  -e NSTA="$(NSTA)" \
 	  -e SEED="$(SEED)" \
 	  -e SIM_TIME="$(SIM_TIME)" \
+	  -e V3_COLLECT="$(V3_COLLECT)" \
+	  -e V3_DATA_DIR="/work/$(V3_DATA_DIR)" \
 	  $(NS3_IMAGE) \
 	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) positive"
 
 # Run MLO negative bias attack scenario
 run-mlo-negative:
 	@test -n "$(EXP_ID)" || (echo "EXP_ID required. Example: make run-mlo-negative EXP_ID=20260103-1400-mlo-attack-neg-42" && exit 1)
-	@docker run --rm -it \
+	@docker run --rm $(if $(INTERACTIVE),-it,) \
 	  --user "$$(id -u):$$(id -g)" \
 	  -v "$(CURDIR)":/work \
 	  -e NAP="$(NAP)" \
 	  -e NSTA="$(NSTA)" \
 	  -e SEED="$(SEED)" \
 	  -e SIM_TIME="$(SIM_TIME)" \
+	  -e V3_COLLECT="$(V3_COLLECT)" \
+	  -e V3_DATA_DIR="/work/$(V3_DATA_DIR)" \
 	  $(NS3_IMAGE) \
 	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) negative"
 
