@@ -171,8 +171,11 @@ run-exp:
 
 .PHONY: run-mlo-normal run-mlo-positive run-mlo-negative run-mlo-exp run-mlo-exp-stream
 
-SEED ?= 42
+SEED    ?= 42
 SIM_TIME ?= 50.0
+NAP     ?= 1
+NSTA    ?= 2
+NCPU    ?= $(shell nproc)
 
 # Run MLO normal baseline scenario (no attack)
 run-mlo-normal:
@@ -180,8 +183,12 @@ run-mlo-normal:
 	@docker run --rm -it \
 	  --user "$$(id -u):$$(id -g)" \
 	  -v "$(CURDIR)":/work \
+	  -e NAP="$(NAP)" \
+	  -e NSTA="$(NSTA)" \
+	  -e SEED="$(SEED)" \
+	  -e SIM_TIME="$(SIM_TIME)" \
 	  $(NS3_IMAGE) \
-	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) normal $(SEED) '' $(SIM_TIME)"
+	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) normal"
 
 # Run MLO positive bias attack scenario
 run-mlo-positive:
@@ -189,8 +196,12 @@ run-mlo-positive:
 	@docker run --rm -it \
 	  --user "$$(id -u):$$(id -g)" \
 	  -v "$(CURDIR)":/work \
+	  -e NAP="$(NAP)" \
+	  -e NSTA="$(NSTA)" \
+	  -e SEED="$(SEED)" \
+	  -e SIM_TIME="$(SIM_TIME)" \
 	  $(NS3_IMAGE) \
-	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) positive $(SEED) '' $(SIM_TIME)"
+	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) positive"
 
 # Run MLO negative bias attack scenario
 run-mlo-negative:
@@ -198,8 +209,12 @@ run-mlo-negative:
 	@docker run --rm -it \
 	  --user "$$(id -u):$$(id -g)" \
 	  -v "$(CURDIR)":/work \
+	  -e NAP="$(NAP)" \
+	  -e NSTA="$(NSTA)" \
+	  -e SEED="$(SEED)" \
+	  -e SIM_TIME="$(SIM_TIME)" \
 	  $(NS3_IMAGE) \
-	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) negative $(SEED) '' $(SIM_TIME)"
+	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) negative"
 
 # Full MLO pipeline: simulation + exporter (requires pipeline-up first)
 run-mlo-exp:

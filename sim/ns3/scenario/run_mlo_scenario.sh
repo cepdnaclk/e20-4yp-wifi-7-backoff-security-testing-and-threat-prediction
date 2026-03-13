@@ -21,9 +21,11 @@ set -euo pipefail
 # --- Input Validation ---
 EXP_ID="${1:-}"
 SCENARIO="${2:-}"
-SEED="${3:-42}"
+SEED="${SEED:-${3:-42}}"
 BIAS_OVERRIDE="${4:-}"
-SIM_TIME="${5:-50.0}"
+SIM_TIME="${SIM_TIME:-${5:-50.0}}"
+NAP="${NAP:-1}"      # Number of access points (default: 1, unchanged)
+NSTA="${NSTA:-2}"    # Stations per AP (default: 2, unchanged)
 if [ -z "${EXP_ID}" ] || [ -z "${SCENARIO}" ]; then
     echo "Usage: $0 <EXP_ID> <SCENARIO> [SEED] [BIAS] [SIM_TIME]"
     echo ""
@@ -74,6 +76,8 @@ echo "Source file:   ${CC_FILE}"
 echo "Bias:          ${BIAS}"
 echo "Seed:          ${SEED}"
 echo "Sim time:      ${SIM_TIME}s"
+echo "nAP:           ${NAP}"
+echo "nSTA (per AP): ${NSTA}"
 echo "=============================================="
 
 # --- Directory Setup ---
@@ -171,6 +175,9 @@ set +e
 cd /opt/ns-3-dev
 write_pipeline_status "ns3" "active" 0 0
 ./ns3 run "scratch/${CC_FILE%.cc}" -- \
+    --nAp="${NAP}" \
+    --nSta="${NSTA}" \
+    --seed="${SEED}" \
     --bias="${BIAS}" \
     --time="${SIM_TIME}" \
     --jsonPath="${JSON_OUTPUT}" \
@@ -235,6 +242,22 @@ if ! [[ "${WINDOW_COUNT}" =~ ^[0-9]+$ ]]; then
 fi
 echo "JSON output created: ${WINDOW_COUNT} windows (${FILE_SIZE} bytes)"
 write_pipeline_status "ns3" "active" "${WINDOW_COUNT}" "$((WINDOW_COUNT * 13))"
+
+# --- Copy to v3 training data if requested ---
+if [ -n "${V3_COLLECT:-}" ]; then
+    LABEL_DIR="${V3_DATA_DIR:-twin/gnn/training_data/v3}"
+    if [ "${SCENARIO}" = "normal" ]; then
+        mkdir -p "${LABEL_DIR}/Normal"
+        TAG="nap${NAP}_nsta${NSTA}_seed${SEED}_${SCENARIO}_${SIM_TIME}s"
+        cp "${JSON_OUTPUT}" "${LABEL_DIR}/Normal/${TAG}.json"
+        echo "[collect] Saved Normal/${TAG}.json"
+    else
+        mkdir -p "${LABEL_DIR}/Attack"
+        TAG="nap${NAP}_nsta${NSTA}_seed${SEED}_${SCENARIO}_${SIM_TIME}s"
+        cp "${JSON_OUTPUT}" "${LABEL_DIR}/Attack/${TAG}.json"
+        echo "[collect] Saved Attack/${TAG}.json"
+    fi
+fi
 
 # --- Convert to JSONL ---
 echo "Converting JSON to JSONL format..."

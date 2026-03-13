@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AppProvider } from './context/AppContext'
 import TopBar from './components/layout/TopBar'
 import Sidebar from './components/layout/Sidebar'
 import PipelineSection from './sections/PipelineSection'
+import RunSection from './sections/RunSection'
 import ExperimentSection from './sections/ExperimentSection'
 import ModelSection from './sections/ModelSection'
 import RunHistorySection from './sections/RunHistorySection'
@@ -11,6 +12,7 @@ import NetworkHealthSection from './sections/NetworkHealthSection'
 
 export type SectionId =
   | 'pipeline'
+  | 'run'
   | 'experiment'
   | 'model'
   | 'history'
@@ -19,6 +21,7 @@ export type SectionId =
 
 const SECTIONS: Record<SectionId, React.FC> = {
   pipeline: PipelineSection,
+  run: RunSection,
   experiment: ExperimentSection,
   model: ModelSection,
   history: RunHistorySection,
@@ -28,6 +31,18 @@ const SECTIONS: Record<SectionId, React.FC> = {
 
 export default function App() {
   const [activeSection, setActiveSection] = useState<SectionId>('pipeline')
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.section && detail.section in SECTIONS) {
+        setActiveSection(detail.section as SectionId)
+      }
+    }
+    window.addEventListener('navigate', handler)
+    return () => window.removeEventListener('navigate', handler)
+  }, [])
+
   const Section = SECTIONS[activeSection]
 
   return (

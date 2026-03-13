@@ -1,5 +1,6 @@
 import {
   Activity,
+  Play,
   FlaskConical,
   Brain,
   History,
@@ -15,8 +16,9 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'pipeline',   label: 'Pipeline Monitor', icon: Activity },
-  { id: 'experiment', label: 'Experiment View',  icon: FlaskConical },
+  { id: 'pipeline',   label: 'Pipeline Monitor',  icon: Activity },
+  { id: 'run',        label: 'Run Experiment',     icon: Play },
+  { id: 'experiment', label: 'Experiment View',    icon: FlaskConical },
   { id: 'model',      label: 'Model Intelligence', icon: Brain },
   { id: 'history',    label: 'Run History',      icon: History },
   { id: 'attack',     label: 'Attack Analysis',  icon: ShieldAlert },

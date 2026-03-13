@@ -26,6 +26,7 @@ from sklearn.preprocessing import StandardScaler
 from .preprocessing import (
     convert_to_deltas,
     add_derived_features,
+    extract_features,
     segment_windows,
     BASE_FEATURE_KEYS,
     DERIVED_FEATURE_KEYS,
@@ -60,6 +61,7 @@ class WiFi7AttackDataset(Dataset):
         stride: int = None,
         scaler: Optional[StandardScaler] = None,
         use_derived_features: bool = True,
+        multi_ap_normalise: bool = True,
         transform=None,
         pre_transform=None
     ):
@@ -73,6 +75,9 @@ class WiFi7AttackDataset(Dataset):
             stride: Segmentation stride (None = non-overlapping)
             scaler: Feature scaler (fit on training data only!)
             use_derived_features: Whether to add ratio features (default: True)
+            multi_ap_normalise: Apply per-AP/per-STA normalisation before
+                scaling.  Falls back gracefully for v2 data without
+                ``num_ap``/``num_sta`` fields.
             transform: Optional PyG transform
             pre_transform: Optional PyG pre-transform
 
@@ -94,8 +99,11 @@ class WiFi7AttackDataset(Dataset):
         self.stride = stride if stride else segment_length  # Non-overlapping by default
         self.scaler = scaler
         self.use_derived_features = use_derived_features
+        self.multi_ap_normalise = multi_ap_normalise
 
-        # Feature keys (13 base or 16 with derived)
+        # Feature keys (13 base or 16 with derived).
+        # The segment-length conditioning feature (+1) is appended by
+        # extract_features() at runtime rather than stored as a key here.
         self.feature_keys = BASE_FEATURE_KEYS.copy()
         if use_derived_features:
             self.feature_keys.extend(DERIVED_FEATURE_KEYS)
@@ -104,7 +112,8 @@ class WiFi7AttackDataset(Dataset):
         assert 'bias' not in self.feature_keys, \
             "CRITICAL ERROR: 'bias' must NEVER be in feature keys!"
 
-        self.in_channels = len(self.feature_keys)
+        # in_channels = base(+derived) features + 1 seg-len conditioning feature
+        self.in_channels = len(self.feature_keys) + 1
 
         # Pre-process all files into graph samples
         print(f"Loading {len(file_list)} files with segment_length={segment_length}...")
@@ -167,27 +176,30 @@ class WiFi7AttackDataset(Dataset):
         """
         Extract feature matrix from segment.
 
+        Delegates to the centralised ``extract_features()`` function so that
+        multi-AP normalisation and segment-length conditioning are applied
+        identically here and in the inference path.
+
         Args:
             segment: List of window dictionaries
 
         Returns:
             Feature tensor of shape [segment_length, in_channels]
+            where in_channels = (13 or 16) + 1 seg-len feature
         """
-        features = []
+        # Use centralised function so preprocessing is always identical
+        x_np = extract_features(
+            segment,
+            use_derived=self.use_derived_features,
+            segment_length=self.segment_length,
+            multi_ap_normalise=self.multi_ap_normalise,
+        )
 
-        for window in segment:
-            feature_vector = [
-                float(window.get(key, 0.0))
-                for key in self.feature_keys
-            ]
-            features.append(feature_vector)
-
-        x = torch.tensor(features, dtype=torch.float)
+        x = torch.from_numpy(x_np)
 
         # Apply scaling if scaler is provided
         if self.scaler is not None:
-            x_np = x.numpy()
-            x_scaled = self.scaler.transform(x_np)
+            x_scaled = self.scaler.transform(x.numpy())
             x = torch.from_numpy(x_scaled).float()
 
         return x
@@ -329,7 +341,9 @@ def create_datasets_with_scaler(
     val_files: List[Path],
     test_files: List[Path],
     segment_length: int = 256,
-    use_derived_features: bool = True
+    stride: int = None,
+    use_derived_features: bool = True,
+    multi_ap_normalise: bool = True,
 ) -> Tuple[WiFi7AttackDataset, WiFi7AttackDataset, WiFi7AttackDataset, StandardScaler]:
     """
     Create train/val/test datasets with a shared scaler.
@@ -341,7 +355,10 @@ def create_datasets_with_scaler(
         val_files: Validation file paths
         test_files: Test file paths
         segment_length: Windows per segment
+        stride: Segmentation stride (None = non-overlapping, i.e. stride = segment_length)
         use_derived_features: Whether to use derived features
+        multi_ap_normalise: Apply per-AP/per-STA normalisation before scaling.
+            Falls back gracefully for v2 data without ``num_ap``/``num_sta``.
 
     Returns:
         Tuple of (train_dataset, val_dataset, test_dataset, scaler)
@@ -356,8 +373,10 @@ def create_datasets_with_scaler(
         root="data",
         file_list=train_files,
         segment_length=segment_length,
+        stride=stride,
         scaler=None,  # No scaler yet
-        use_derived_features=use_derived_features
+        use_derived_features=use_derived_features,
+        multi_ap_normalise=multi_ap_normalise,
     )
 
     # Collect all training features to fit scaler
@@ -381,24 +400,30 @@ def create_datasets_with_scaler(
         root="data",
         file_list=train_files,
         segment_length=segment_length,
+        stride=stride,
         scaler=scaler,
-        use_derived_features=use_derived_features
+        use_derived_features=use_derived_features,
+        multi_ap_normalise=multi_ap_normalise,
     )
 
     val_dataset = WiFi7AttackDataset(
         root="data",
         file_list=val_files,
         segment_length=segment_length,
+        stride=stride,
         scaler=scaler,
-        use_derived_features=use_derived_features
+        use_derived_features=use_derived_features,
+        multi_ap_normalise=multi_ap_normalise,
     )
 
     test_dataset = WiFi7AttackDataset(
         root="data",
         file_list=test_files,
         segment_length=segment_length,
+        stride=stride,
         scaler=scaler,
-        use_derived_features=use_derived_features
+        use_derived_features=use_derived_features,
+        multi_ap_normalise=multi_ap_normalise,
     )
 
     print("\n" + "="*60)

@@ -21,6 +21,8 @@ This document provides complete context about the current state of the project. 
 | WP9 | ✅ Complete | GCN model v2.0.0 retraining (284 balanced scenarios) |
 | WP9.5 | ✅ Complete | Unified Grafana dashboard (38 panels, 3 variables) |
 | WP10 | ✅ Complete | Custom web dashboard (React 18 + FastAPI, port 8888) |
+| WP11 | ✅ Complete | Pipeline & DB writer bug fixes (Attack Analysis tab) |
+| WP12 | 🔄 In Progress | GCN v3 multi-AP + multi-length training + dashboard launcher (implementation complete — data collection & training pending) |
 
 ---
 
@@ -129,6 +131,35 @@ make gcn-down              # Stop windowizer + GCN detector
 make gcn-status            # Check status and logs
 make run-mlo-exp EXP_ID=... SCENARIO=normal|positive|negative
 bash run_scenarios.sh      # Run all 3 scenarios
+```
+
+### GCN v3 Data Collection (WP12)
+```bash
+make gcn-collect-data NCPU=8              # Run all 72 simulations in parallel (8 cores)
+make gcn-collect-data NCPU=8 SIM_TIME=80  # Explicit 80s sim time
+# Or directly:
+NCPU=8 bash sim/ns3/scenario/collect_v3_data.sh
+```
+
+### Multi-AP Simulation (WP12)
+```bash
+make run-mlo-exp EXP_ID=... SCENARIO=normal NAP=2 NSTA=4 SEED=42 SIM_TIME=80
+make run-mlo-exp EXP_ID=... SCENARIO=positive NAP=4 NSTA=8 SEED=43 BIAS=5000
+```
+
+### GCN v3 Training (WP12)
+```bash
+make gcn-train OUTPUT_DIR=twin/registry/gcn/v3.0.0   # uses training_v3.yaml
+make gcn-deploy VERSION=v3.0.0                         # update current symlink
+```
+
+### Dashboard Experiment Launcher (WP12)
+```
+http://localhost:8888  →  "Run Experiment" sidebar section
+  - Configure nAp (1-6), nSta, Scenario, Seed, SimTime, SegmentLength
+  - Launch → live pipeline stage progress
+  - Completed → auto-navigate to Experiment View
+API: POST /api/run/launch  GET /api/run/status  POST /api/run/cancel
 ```
 
 ### Custom Dashboard (WP10)
