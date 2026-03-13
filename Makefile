@@ -55,6 +55,10 @@ HARMONIZER_IMAGE=ndt/harmonizer:local
 
 KAFKA_BROKERS ?= bus-redpanda:9092
 KAFKA_TOPIC   ?= wifi7.telemetry.v0_1
+EXPORTER_POLL_INTERVAL ?= 0.25
+EXPORTER_FLUSH_TIMEOUT ?= 30.0
+EXPORTER_MAX_MESSAGES_PER_CYCLE ?= 0
+EXPORTER_RUN_CONTINUOUS ?= false
 
 PG_HOST ?= udr-db
 PG_DB   ?= udr
@@ -77,6 +81,10 @@ exporter-run:
 	  -e TELEMETRY_FILE="/work/sim/ns3/artifacts/$(EXP_ID)/telemetry.jsonl" \
 	  -e KAFKA_BROKERS="$(KAFKA_BROKERS)" \
 	  -e KAFKA_TOPIC="$(KAFKA_TOPIC)" \
+	  -e POLL_INTERVAL="$(EXPORTER_POLL_INTERVAL)" \
+	  -e FLUSH_TIMEOUT="$(EXPORTER_FLUSH_TIMEOUT)" \
+	  -e MAX_MESSAGES_PER_CYCLE="$(EXPORTER_MAX_MESSAGES_PER_CYCLE)" \
+	  -e RUN_CONTINUOUS="$(EXPORTER_RUN_CONTINUOUS)" \
 	  $(EXPORTER_IMAGE)
 
 harmonizer-run:
@@ -161,9 +169,10 @@ run-exp:
 #   make run-mlo-exp EXP_ID=... SCENARIO=normal|positive|negative
 # =============================================================================
 
-.PHONY: run-mlo-normal run-mlo-positive run-mlo-negative run-mlo-exp
+.PHONY: run-mlo-normal run-mlo-positive run-mlo-negative run-mlo-exp run-mlo-exp-stream
 
 SEED ?= 42
+SIM_TIME ?= 50.0
 
 # Run MLO normal baseline scenario (no attack)
 run-mlo-normal:
@@ -172,7 +181,7 @@ run-mlo-normal:
 	  --user "$$(id -u):$$(id -g)" \
 	  -v "$(PWD)":/work \
 	  $(NS3_IMAGE) \
-	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) normal $(SEED)"
+	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) normal $(SEED) '' $(SIM_TIME)"
 
 # Run MLO positive bias attack scenario
 run-mlo-positive:
@@ -181,7 +190,7 @@ run-mlo-positive:
 	  --user "$$(id -u):$$(id -g)" \
 	  -v "$(PWD)":/work \
 	  $(NS3_IMAGE) \
-	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) positive $(SEED)"
+	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) positive $(SEED) '' $(SIM_TIME)"
 
 # Run MLO negative bias attack scenario
 run-mlo-negative:
@@ -190,7 +199,7 @@ run-mlo-negative:
 	  --user "$$(id -u):$$(id -g)" \
 	  -v "$(PWD)":/work \
 	  $(NS3_IMAGE) \
-	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) negative $(SEED)"
+	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) negative $(SEED) '' $(SIM_TIME)"
 
 # Full MLO pipeline: simulation + exporter (requires pipeline-up first)
 run-mlo-exp:
@@ -199,13 +208,18 @@ run-mlo-exp:
 	@echo "=============================================="
 	@echo "Running MLO experiment: $(EXP_ID)"
 	@echo "Scenario: $(SCENARIO)"
+	@echo "Sim time: $(SIM_TIME)s"
+	@echo "Exporter max messages/cycle: $(EXPORTER_MAX_MESSAGES_PER_CYCLE)"
 	@echo "=============================================="
 	@echo ""
 	@echo "[1/3] Running ns-3 MLO simulation..."
-	@$(MAKE) run-mlo-$(SCENARIO) EXP_ID=$(EXP_ID) SEED=$(SEED)
+	@$(MAKE) run-mlo-$(SCENARIO) EXP_ID=$(EXP_ID) SEED=$(SEED) SIM_TIME=$(SIM_TIME)
 	@echo ""
 	@echo "[2/3] Publishing telemetry to Kafka..."
-	@$(MAKE) exporter-run EXP_ID=$(EXP_ID)
+	@$(MAKE) exporter-run EXP_ID=$(EXP_ID) \
+	  EXPORTER_POLL_INTERVAL=$(EXPORTER_POLL_INTERVAL) \
+	  EXPORTER_FLUSH_TIMEOUT=$(EXPORTER_FLUSH_TIMEOUT) \
+	  EXPORTER_MAX_MESSAGES_PER_CYCLE=$(EXPORTER_MAX_MESSAGES_PER_CYCLE)
 	@echo ""
 	@echo "[3/3] Waiting for harmonizer ingestion (5s)..."
 	@sleep 5
@@ -216,6 +230,16 @@ run-mlo-exp:
 	@echo "View results:"
 	@echo "  - Grafana: http://localhost:3000"
 	@echo "  - DB check: docker exec -it clab-ndt-wifi7-mlo-security-udr-db psql -U udr -d udr -c \"SELECT COUNT(*) FROM metrics WHERE experiment_id='$(EXP_ID)';\""
+
+# Stream-friendly MLO run: publish telemetry in segment-sized chunks to mimic live flow.
+run-mlo-exp-stream:
+	@$(MAKE) run-mlo-exp \
+	  EXP_ID=$(EXP_ID) \
+	  SCENARIO=$(SCENARIO) \
+	  SEED=$(SEED) \
+	  SIM_TIME=$(SIM_TIME) \
+	  EXPORTER_MAX_MESSAGES_PER_CYCLE=3328 \
+	  EXPORTER_POLL_INTERVAL=0.5
 
 # =============================================================================
 # Kafka Topic Management (WP7.5 Pipeline Hardening)

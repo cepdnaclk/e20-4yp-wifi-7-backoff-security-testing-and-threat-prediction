@@ -32,9 +32,12 @@ services:
       PG_USER: ${PG_USER:-udr}
       PG_PASS: ${PG_PASS:-udr_pass}
       REGISTRY_PATH: /registry
+      PIPELINE_ACTIVE_STATUS_FILE: /artifacts/.pipeline_active.json
     volumes:
       # Mount GCN model registry read-only so the dashboard can list versions
       - ./twin/registry/gcn:/registry:ro
+      # Mount ns-3 artifacts so backend can read live run status markers
+      - ./sim/ns3/artifacts:/artifacts:ro
     logging:
       driver: json-file
       options:

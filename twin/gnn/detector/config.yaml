@@ -49,7 +49,7 @@ database:
   user: udr
   password_env: PG_PASS              # Read password from env var
   table: gcn_predictions
-  batch_insert_size: 100             # Batch DB inserts
+  batch_insert_size: 1               # Write each segment immediately to DB
   connection_pool_size: 5
 
 # Logging configuration

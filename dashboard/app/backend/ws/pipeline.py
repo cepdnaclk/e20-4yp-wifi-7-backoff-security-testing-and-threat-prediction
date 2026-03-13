@@ -4,7 +4,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from ..db import queries
 
 router = APIRouter()
-POLL_INTERVAL = 2  # seconds
+POLL_INTERVAL = 0.5  # seconds
+BACKFILL_EVENTS = 20
 
 
 @router.websocket("/ws/pipeline")
@@ -23,12 +24,13 @@ async def websocket_pipeline(websocket: WebSocket):
         }
     )
 
-    # Get initial last_pred_id
+    # Initialize with a short backfill so activity feed is not empty on reconnect.
     try:
         async with pool.acquire() as conn:
-            last_pred_id = (
+            max_pred_id = (
                 await conn.fetchval("SELECT COALESCE(MAX(id), 0) FROM gcn_predictions") or 0
             )
+            last_pred_id = max(0, int(max_pred_id) - BACKFILL_EVENTS)
     except Exception:
         pass
 
@@ -61,7 +63,12 @@ async def websocket_pipeline(websocket: WebSocket):
 
             # Poll for new predictions and emit events
             try:
-                new_preds = await queries.get_new_predictions(pool, last_pred_id)
+                new_preds = await queries.get_new_predictions(
+                    pool,
+                    last_pred_id,
+                    experiment_id=latest_exp,
+                    limit=100,
+                )
                 for pred in new_preds:
                     label = "ATTACK" if pred["prediction"] == 1 else "NORMAL"
                     conf = float(pred["confidence"])

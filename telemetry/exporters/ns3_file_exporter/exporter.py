@@ -29,6 +29,10 @@ SOURCE = os.getenv("SOURCE", "ns3")
 SCHEMA_VERSION = os.getenv("SCHEMA_VERSION", "v0.1")
 POLL_INTERVAL = float(os.getenv("POLL_INTERVAL", "0.25"))
 FLUSH_TIMEOUT = float(os.getenv("FLUSH_TIMEOUT", "30.0"))
+MAX_MESSAGES_PER_CYCLE = max(0, int(os.getenv("MAX_MESSAGES_PER_CYCLE", "0")))
+RUN_CONTINUOUS = os.getenv("RUN_CONTINUOUS", "false").strip().lower() in {
+    "1", "true", "yes", "on"
+}
 
 STATE_FILE = os.getenv("STATE_FILE", "/state/exporter_state.json")
 
@@ -139,6 +143,9 @@ def main():
 
     print(f"[exporter] brokers={BROKERS} topic={TOPIC}")
     print(f"[exporter] file={TELEMETRY_FILE} resume_offset={offset}")
+    if MAX_MESSAGES_PER_CYCLE > 0:
+        print(f"[exporter] max_messages_per_cycle={MAX_MESSAGES_PER_CYCLE}")
+    print(f"[exporter] run_continuous={RUN_CONTINUOUS}")
 
     # Health check: verify topic exists before processing
     check_broker_health()
@@ -188,6 +195,13 @@ def main():
 
             # Read ENTIRE file from offset to end
             while True:
+                if MAX_MESSAGES_PER_CYCLE > 0 and total_sent >= MAX_MESSAGES_PER_CYCLE:
+                    print(
+                        f"[exporter] cycle limit reached: {total_sent} messages "
+                        f"(will continue next cycle)"
+                    )
+                    break
+
                 line = f.readline()
                 if not line:
                     break
@@ -273,6 +287,9 @@ def main():
             offset = final_offset  # Update for next iteration
         else:
             print(f"[exporter] no new messages in file")
+            if not RUN_CONTINUOUS:
+                print("[exporter] idle with no new messages; exiting (run_once mode)")
+                break
 
         time.sleep(POLL_INTERVAL)
 
