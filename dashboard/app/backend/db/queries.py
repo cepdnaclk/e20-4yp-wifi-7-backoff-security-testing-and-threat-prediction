@@ -111,41 +111,34 @@ async def get_experiment_metric_series(
     entity_id: Optional[str] = None,
     downsample: int = 500,
 ):
-    """Returns time-series data for a single metric, downsampled if needed."""
+    """Returns time-series data for a single metric aggregated by timestamp."""
+    # Aggregate multiple entities per timestamp into a single value per ts.
+    # SUM for count/rate metrics, AVG for ratio/delay metrics — use AVG as safe default.
     if entity_id:
-        count_sql = "SELECT COUNT(*) FROM metrics WHERE experiment_id = $1 AND metric_name = $2 AND entity_id = $3"
-        args_count = [experiment_id, metric_name, entity_id]
+        agg_sql = """
+        SELECT ts, ROUND(AVG(value)::numeric, 6) AS value, $3::text AS entity_id, MIN(unit) AS unit
+        FROM metrics
+        WHERE experiment_id = $1 AND metric_name = $2 AND entity_id = $3
+        GROUP BY ts ORDER BY ts
+        """
+        args = [experiment_id, metric_name, entity_id]
     else:
-        count_sql = "SELECT COUNT(*) FROM metrics WHERE experiment_id = $1 AND metric_name = $2"
-        args_count = [experiment_id, metric_name]
+        agg_sql = """
+        SELECT ts, ROUND(AVG(value)::numeric, 6) AS value, 'all' AS entity_id, MIN(unit) AS unit
+        FROM metrics
+        WHERE experiment_id = $1 AND metric_name = $2
+        GROUP BY ts ORDER BY ts
+        """
+        args = [experiment_id, metric_name]
 
     async with pool.acquire() as conn:
-        total = await conn.fetchval(count_sql, *args_count)
+        all_rows = await conn.fetch(agg_sql, *args)
 
-    # Downsample by picking every Nth row
+    # Downsample if too many points
+    total = len(all_rows)
     step = max(1, total // downsample) if total else 1
+    rows = all_rows[::step]
 
-    if entity_id:
-        sql = """
-        SELECT ts, value, entity_id, unit FROM (
-            SELECT ts, value, entity_id, unit, ROW_NUMBER() OVER (ORDER BY ts) AS rn
-            FROM metrics WHERE experiment_id = $1 AND metric_name = $2 AND entity_id = $3
-        ) sub WHERE rn % $4 = 0 ORDER BY ts
-        """
-        args = [experiment_id, metric_name, entity_id, step]
-    else:
-        sql = """
-        SELECT ts, value, entity_id, unit FROM (
-            SELECT ts, value, entity_id, unit, ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY ts) AS rn
-            FROM metrics WHERE experiment_id = $1 AND metric_name = $2
-        ) sub WHERE rn % $3 = 0 ORDER BY ts
-        """
-        args = [experiment_id, metric_name, step]
-
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(sql, *args)
-
-    # Also get unit from first row
     unit_sql = "SELECT unit FROM metrics WHERE experiment_id = $1 AND metric_name = $2 LIMIT 1"
     async with pool.acquire() as conn:
         unit = await conn.fetchval(unit_sql, experiment_id, metric_name) or ""

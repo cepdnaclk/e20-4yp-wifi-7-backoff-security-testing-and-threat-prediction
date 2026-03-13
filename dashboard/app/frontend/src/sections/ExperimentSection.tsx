@@ -14,17 +14,31 @@ const METRIC_OPTIONS = [
   'net_avg_delay_ms', 'channel_busy_ratio',
 ]
 
+const METRIC_COLORS: Record<string, string> = {
+  avg_backoff_slots:     'var(--color-brand)',
+  net_throughput_mbps:   'var(--color-normal)',
+  net_packet_loss_ratio: 'var(--color-attack)',
+  net_avg_delay_ms:      '#f97316',
+  channel_busy_ratio:    '#a78bfa',
+}
+
 export default function ExperimentSection() {
   const { selectedExperimentId, setSelectedExperimentId, latestExperimentId } = useApp()
   const [selectedMetric, setSelectedMetric] = useState('avg_backoff_slots')
+  const [compareId, setCompareId] = useState<string | null>(null)
+  const [compareMode, setCompareMode] = useState(false)
 
   const activeId = selectedExperimentId || latestExperimentId
   const { data: expList, loading: expLoading, error: expError } = useExperiments(50)
   const { data: summary } = useExperimentSummary(activeId)
   const { data: preds } = useExperimentPredictions(activeId)
   const { data: series } = useMetricSeries(activeId, selectedMetric)
+  const { data: compareSeries } = useMetricSeries(compareMode ? compareId : null, selectedMetric)
 
   const experiments: Experiment[] = expList?.experiments || []
+
+  const primaryLabel = activeId ? activeId.split('-').slice(-3).join('-') : ''
+  const compareLabel = compareId ? compareId.split('-').slice(-3).join('-') : ''
 
   return (
     <div className="flex flex-col gap-5">
@@ -32,10 +46,20 @@ export default function ExperimentSection() {
 
       {/* Experiment selector */}
       <div className="neu-card">
-        <div className="section-title text-sm mb-3">Select Experiment</div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="section-title text-sm">
+            {compareMode ? 'Primary Experiment' : 'Select Experiment'}
+          </div>
+          <button
+            className={`neu-btn text-xs py-1 px-3 ${compareMode ? 'neu-btn-primary' : ''}`}
+            onClick={() => { setCompareMode(m => !m); setCompareId(null) }}
+          >
+            {compareMode ? 'Compare ON' : 'Compare'}
+          </button>
+        </div>
         {expLoading && <LoadingSpinner message="Loading experiments…" />}
         {expError && <ErrorBanner message={expError} />}
-        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+        <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto">
           {experiments.map((e) => (
             <button
               key={e.experiment_id}
@@ -50,17 +74,37 @@ export default function ExperimentSection() {
             </button>
           ))}
         </div>
+
+        {/* Compare experiment picker */}
+        {compareMode && (
+          <>
+            <div className="section-title text-sm mt-4 mb-2">Compare With</div>
+            <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto">
+              {experiments
+                .filter(e => e.experiment_id !== activeId)
+                .map((e) => (
+                  <button
+                    key={e.experiment_id}
+                    className={`neu-btn text-xs ${compareId === e.experiment_id ? 'neu-btn-primary' : ''}`}
+                    onClick={() => setCompareId(id => id === e.experiment_id ? null : e.experiment_id)}
+                  >
+                    {e.experiment_id.split('-').slice(-3).join('-')}
+                    <Badge
+                      variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
+                      label={e.inferred_type}
+                    />
+                  </button>
+                ))}
+            </div>
+          </>
+        )}
       </div>
 
       {activeId && summary && (
         <>
           {/* KPI row */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <KpiCard
-              label="Segments"
-              value={summary.segment_count}
-              accent="var(--color-brand)"
-            />
+            <KpiCard label="Segments" value={summary.segment_count} accent="var(--color-brand)" />
             <KpiCard
               label="Attack Rate"
               value={`${(summary.attack_rate * 100).toFixed(1)}%`}
@@ -80,13 +124,14 @@ export default function ExperimentSection() {
 
           {/* Metric chart */}
           <div className="neu-card">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <div className="section-title text-base">Metric Evolution</div>
               <div className="flex gap-2 flex-wrap">
                 {METRIC_OPTIONS.map((m) => (
                   <button
                     key={m}
                     className={`neu-btn text-xs py-1 ${selectedMetric === m ? 'neu-btn-primary' : ''}`}
+                    style={selectedMetric === m ? {} : { borderColor: METRIC_COLORS[m] }}
                     onClick={() => setSelectedMetric(m)}
                   >
                     {m.replace(/_/g, ' ')}
@@ -94,12 +139,26 @@ export default function ExperimentSection() {
                 ))}
               </div>
             </div>
+
+            {/* Compare legend labels */}
+            {compareMode && compareId && (
+              <div className="flex gap-4 mb-3 text-xs" style={{ color: 'var(--color-muted)' }}>
+                <span style={{ color: METRIC_COLORS[selectedMetric] || 'var(--color-brand)' }}>
+                  ● {primaryLabel}
+                </span>
+                <span style={{ color: 'var(--color-attack)' }}>● {compareLabel}</span>
+              </div>
+            )}
+
             {series ? (
               <MetricLineChart
                 data={series.points}
-                unit={series.unit ? ` ${series.unit}` : ''}
-                name={selectedMetric.replace(/_/g, ' ')}
-                height={200}
+                unit={series.unit || ''}
+                color={METRIC_COLORS[selectedMetric] || 'var(--color-brand)'}
+                name={primaryLabel || selectedMetric.replace(/_/g, ' ')}
+                height={220}
+                compareData={compareMode && compareSeries ? compareSeries.points : undefined}
+                compareName={compareMode && compareId ? compareLabel : undefined}
               />
             ) : (
               <LoadingSpinner />
