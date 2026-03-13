@@ -146,7 +146,7 @@ export default function ExperimentSection() {
                 <span style={{ color: METRIC_COLORS[selectedMetric] || 'var(--color-brand)' }}>
                   ● {primaryLabel}
                 </span>
-                <span style={{ color: 'var(--color-attack)' }}>● {compareLabel}</span>
+                <span style={{ color: '#06b6d4' }}>● {compareLabel}</span>
               </div>
             )}
 

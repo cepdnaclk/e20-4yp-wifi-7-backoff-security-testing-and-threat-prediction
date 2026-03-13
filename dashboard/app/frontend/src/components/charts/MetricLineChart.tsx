@@ -47,7 +47,7 @@ export default function MetricLineChart({
 }: MetricLineChartProps) {
   const series: SeriesDef[] = [{ data, name, color }]
   if (compareData && compareData.length > 0) {
-    series.push({ data: compareData, name: compareName ?? 'compare', color: 'var(--color-attack)' })
+    series.push({ data: compareData, name: compareName ?? 'compare', color: '#06b6d4' })
   }
 
   const chartData = buildChartData(series)
