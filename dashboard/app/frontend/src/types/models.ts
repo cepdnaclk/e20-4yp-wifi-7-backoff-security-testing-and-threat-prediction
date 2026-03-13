@@ -8,10 +8,10 @@ export interface ModelArchitecture {
 
 export interface ModelTestResults {
   accuracy: number
-  f1_score: number
+  f1: number
   precision: number
   recall: number
-  auc_roc: number
+  auc: number
   confusion_matrix: [[number, number], [number, number]]
 }
 

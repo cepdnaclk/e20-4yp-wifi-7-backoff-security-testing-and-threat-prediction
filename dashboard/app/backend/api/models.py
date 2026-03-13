@@ -44,7 +44,7 @@ async def get_active_model(request: Request):
     }
 
 
-@router.get("/active/inference_stats")
+@router.get("/inference-stats")
 async def inference_stats(request: Request):
     row = await queries.get_inference_stats(request.app.state.pool)
     if not row or not row["count"]:

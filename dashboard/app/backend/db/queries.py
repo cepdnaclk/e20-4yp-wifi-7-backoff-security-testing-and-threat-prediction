@@ -403,8 +403,8 @@ async def get_inference_stats(pool):
     SELECT
         COUNT(*) AS count,
         MIN(inference_time_ms) AS min_ms,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY inference_time_ms) AS p50_ms,
-        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY inference_time_ms) AS p95_ms,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY inference_time_ms::float) AS p50_ms,
+        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY inference_time_ms::float) AS p95_ms,
         MAX(inference_time_ms) AS max_ms,
         ROUND(AVG(inference_time_ms)::numeric, 2) AS avg_ms
     FROM gcn_predictions
