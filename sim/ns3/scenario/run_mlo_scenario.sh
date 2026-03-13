@@ -9,7 +9,7 @@
 #   SCENARIO  - Scenario type: normal, positive, or negative
 #   SEED      - Random seed (default: 42)
 #   BIAS      - Attack bias override (default: scenario-specific)
-#   SIM_TIME  - Simulation time in seconds (default: 30.0)
+#   SIM_TIME  - Simulation time in seconds (default: 50.0)
 #
 # Examples:
 #   ./run_mlo_scenario.sh 20260103-1400-mlo-normal-42 normal
@@ -23,7 +23,7 @@ EXP_ID="${1:-}"
 SCENARIO="${2:-}"
 SEED="${3:-42}"
 BIAS_OVERRIDE="${4:-}"
-SIM_TIME="${5:-30.0}"
+SIM_TIME="${5:-50.0}"
 if [ -z "${EXP_ID}" ] || [ -z "${SCENARIO}" ]; then
     echo "Usage: $0 <EXP_ID> <SCENARIO> [SEED] [BIAS] [SIM_TIME]"
     echo ""
@@ -79,6 +79,58 @@ echo "=============================================="
 # --- Directory Setup ---
 OUT_DIR="/work/sim/ns3/artifacts/${EXP_ID}"
 mkdir -p "${OUT_DIR}"
+STATUS_FILE="${OUT_DIR}/pipeline_status.json"
+ACTIVE_STATUS_FILE="/work/sim/ns3/artifacts/.pipeline_active.json"
+
+# --- Live Pipeline Status ---
+CURRENT_STAGE="ns3"
+CURRENT_STATE="idle"
+LAST_WINDOWS=0
+LAST_METRICS=0
+
+write_pipeline_status() {
+    local stage="${1:-ns3}"
+    local state="${2:-idle}"
+    local windows="${3:-0}"
+    local metrics="${4:-0}"
+    local updated_at
+    updated_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+    CURRENT_STAGE="${stage}"
+    CURRENT_STATE="${state}"
+    LAST_WINDOWS="${windows}"
+    LAST_METRICS="${metrics}"
+
+    cat > "${STATUS_FILE}.tmp" <<EOF
+{
+  "experiment_id": "${EXP_ID}",
+  "stage": "${stage}",
+  "state": "${state}",
+  "ns3_windows": ${windows},
+  "metrics_count": ${metrics},
+  "updated_at": "${updated_at}"
+}
+EOF
+    mv -f "${STATUS_FILE}.tmp" "${STATUS_FILE}"
+    cp -f "${STATUS_FILE}" "${ACTIVE_STATUS_FILE}" 2>/dev/null || true
+}
+
+clear_active_status() {
+    if [ -f "${ACTIVE_STATUS_FILE}" ] && grep -Eq "\"experiment_id\"[[:space:]]*:[[:space:]]*\"${EXP_ID}\"" "${ACTIVE_STATUS_FILE}" 2>/dev/null; then
+        rm -f "${ACTIVE_STATUS_FILE}"
+    fi
+}
+
+cleanup_pipeline_status() {
+    local rc=$?
+    if [ "${rc}" -ne 0 ] && [ "${CURRENT_STATE}" = "active" ]; then
+        write_pipeline_status "${CURRENT_STAGE}" "error" "${LAST_WINDOWS}" "${LAST_METRICS}"
+    fi
+    if [ "${CURRENT_STATE}" = "idle" ]; then
+        clear_active_status
+    fi
+}
+trap cleanup_pipeline_status EXIT
 
 # --- Write Metadata ---
 TS_NOW="$(date -Iseconds)"
@@ -117,16 +169,43 @@ echo "  Output: ${JSON_OUTPUT}"
 
 set +e
 cd /opt/ns-3-dev
+write_pipeline_status "ns3" "active" 0 0
 ./ns3 run "scratch/${CC_FILE%.cc}" -- \
     --bias="${BIAS}" \
     --time="${SIM_TIME}" \
     --jsonPath="${JSON_OUTPUT}" \
     > "${OUT_DIR}/ns3_stdout.log" \
-    2> "${OUT_DIR}/ns3_stderr.log"
+    2> "${OUT_DIR}/ns3_stderr.log" &
+ns3_pid=$!
+
+while true; do
+    if [ ! -r "/proc/${ns3_pid}/stat" ]; then
+        break
+    fi
+    NS3_STATE=$(awk '{print $3}' "/proc/${ns3_pid}/stat" 2>/dev/null || echo "?")
+    if [ "${NS3_STATE}" = "Z" ]; then
+        break
+    fi
+
+    if [ -f "${JSON_OUTPUT}" ]; then
+        LAST_WINDOWS=$(grep -c '"window":' "${JSON_OUTPUT}" 2>/dev/null || true)
+    else
+        LAST_WINDOWS=0
+    fi
+    if ! [[ "${LAST_WINDOWS}" =~ ^[0-9]+$ ]]; then
+        LAST_WINDOWS=0
+    fi
+    LAST_METRICS=$((LAST_WINDOWS * 13))
+    write_pipeline_status "ns3" "active" "${LAST_WINDOWS}" "${LAST_METRICS}"
+    sleep 1
+done
+
+wait "${ns3_pid}"
 rc=$?
 set -e
 
 if [ $rc -ne 0 ]; then
+    write_pipeline_status "ns3" "error" "${LAST_WINDOWS}" "${LAST_METRICS}"
     echo "ERROR: ns-3 simulation failed with exit code $rc"
     echo "Check logs:"
     echo "  ${OUT_DIR}/ns3_stdout.log"
@@ -150,8 +229,12 @@ if [ "${FILE_SIZE}" -lt 10 ]; then
 fi
 
 # Count windows by counting opening braces for window objects (simple check)
-WINDOW_COUNT=$(grep -c '"window":' "${JSON_OUTPUT}" 2>/dev/null || echo 0)
+WINDOW_COUNT=$(grep -c '"window":' "${JSON_OUTPUT}" 2>/dev/null || true)
+if ! [[ "${WINDOW_COUNT}" =~ ^[0-9]+$ ]]; then
+    WINDOW_COUNT=0
+fi
 echo "JSON output created: ${WINDOW_COUNT} windows (${FILE_SIZE} bytes)"
+write_pipeline_status "ns3" "active" "${WINDOW_COUNT}" "$((WINDOW_COUNT * 13))"
 
 # --- Convert to JSONL ---
 echo "Converting JSON to JSONL format..."
@@ -169,6 +252,7 @@ fi
 
 JSONL_LINES=$(wc -l < "${JSONL_FILE}")
 echo "JSONL output created: ${JSONL_LINES} metrics"
+write_pipeline_status "ns3" "idle" "${WINDOW_COUNT}" "${JSONL_LINES}"
 
 # --- Summary ---
 echo ""
@@ -181,6 +265,7 @@ echo "Files created:"
 echo "  meta.txt          - Run metadata"
 echo "  mlo_output.json   - Original JSON (for GNN training)"
 echo "  telemetry.jsonl   - Pipeline-compatible JSONL"
+echo "  pipeline_status.json - Live stage status (for dashboard)"
 echo "  ns3_stdout.log    - Simulation stdout"
 echo "  ns3_stderr.log    - Simulation stderr"
 echo ""

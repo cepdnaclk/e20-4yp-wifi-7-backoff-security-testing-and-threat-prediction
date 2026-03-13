@@ -1,6 +1,7 @@
 import asyncpg
 from datetime import datetime, timezone
 from typing import Optional
+from ..runtime.status import read_active_runtime_status
 
 
 # ── Experiments ──────────────────────────────────────────────────────────────
@@ -110,41 +111,34 @@ async def get_experiment_metric_series(
     entity_id: Optional[str] = None,
     downsample: int = 500,
 ):
-    """Returns time-series data for a single metric, downsampled if needed."""
+    """Returns time-series data for a single metric aggregated by timestamp."""
+    # Aggregate multiple entities per timestamp into a single value per ts.
+    # SUM for count/rate metrics, AVG for ratio/delay metrics — use AVG as safe default.
     if entity_id:
-        count_sql = "SELECT COUNT(*) FROM metrics WHERE experiment_id = $1 AND metric_name = $2 AND entity_id = $3"
-        args_count = [experiment_id, metric_name, entity_id]
+        agg_sql = """
+        SELECT ts, ROUND(AVG(value)::numeric, 6) AS value, $3::text AS entity_id, MIN(unit) AS unit
+        FROM metrics
+        WHERE experiment_id = $1 AND metric_name = $2 AND entity_id = $3
+        GROUP BY ts ORDER BY ts
+        """
+        args = [experiment_id, metric_name, entity_id]
     else:
-        count_sql = "SELECT COUNT(*) FROM metrics WHERE experiment_id = $1 AND metric_name = $2"
-        args_count = [experiment_id, metric_name]
+        agg_sql = """
+        SELECT ts, ROUND(AVG(value)::numeric, 6) AS value, 'all' AS entity_id, MIN(unit) AS unit
+        FROM metrics
+        WHERE experiment_id = $1 AND metric_name = $2
+        GROUP BY ts ORDER BY ts
+        """
+        args = [experiment_id, metric_name]
 
     async with pool.acquire() as conn:
-        total = await conn.fetchval(count_sql, *args_count)
+        all_rows = await conn.fetch(agg_sql, *args)
 
-    # Downsample by picking every Nth row
+    # Downsample if too many points
+    total = len(all_rows)
     step = max(1, total // downsample) if total else 1
+    rows = all_rows[::step]
 
-    if entity_id:
-        sql = """
-        SELECT ts, value, entity_id, unit FROM (
-            SELECT ts, value, entity_id, unit, ROW_NUMBER() OVER (ORDER BY ts) AS rn
-            FROM metrics WHERE experiment_id = $1 AND metric_name = $2 AND entity_id = $3
-        ) sub WHERE rn %% $4 = 0 ORDER BY ts
-        """
-        args = [experiment_id, metric_name, entity_id, step]
-    else:
-        sql = """
-        SELECT ts, value, entity_id, unit FROM (
-            SELECT ts, value, entity_id, unit, ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY ts) AS rn
-            FROM metrics WHERE experiment_id = $1 AND metric_name = $2
-        ) sub WHERE rn %% $3 = 0 ORDER BY ts
-        """
-        args = [experiment_id, metric_name, step]
-
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(sql, *args)
-
-    # Also get unit from first row
     unit_sql = "SELECT unit FROM metrics WHERE experiment_id = $1 AND metric_name = $2 LIMIT 1"
     async with pool.acquire() as conn:
         unit = await conn.fetchval(unit_sql, experiment_id, metric_name) or ""
@@ -224,7 +218,7 @@ async def get_pipeline_status(pool):
             return "idle"
         return "idle"
 
-    return {
+    stages = {
         "ns3": {
             "state": stage_state(ns3_age, 60),
             "counter": int(metrics_count),
@@ -256,24 +250,84 @@ async def get_pipeline_status(pool):
             "last_activity_ts": last_pred,
         },
         "db": {
-            "state": "active" if pred_count > 0 else "idle",
+            # DB is "active" only when predictions are being written recently.
+            # This avoids a permanently-active final stage after the first run.
+            "state": stage_state(gcn_age, 60) if pred_count > 0 else "idle",
             "counter": int(pred_count),
             "label": "total",
             "last_activity_ts": last_pred,
         },
-    }, latest_exp_p or latest_exp_m
+    }
+
+    latest_exp = latest_exp_p or latest_exp_m
+
+    runtime = read_active_runtime_status()
+    if runtime:
+        runtime_stage = runtime.get("stage", "")
+        runtime_state = runtime.get("state", "idle")
+        merged_state = "error" if runtime_state == "error" else ("active" if runtime_state == "active" else "idle")
+        runtime_ts = runtime.get("updated_at")
+        runtime_exp = runtime.get("experiment_id")
+        runtime_windows = int(runtime.get("ns3_windows", 0))
+        runtime_metrics = int(runtime.get("metrics_count", 0))
+
+        if runtime_exp:
+            latest_exp = runtime_exp
+
+        if runtime_stage == "ns3":
+            stages["ns3"] = {
+                "state": merged_state,
+                "counter": runtime_windows,
+                "label": "windows",
+                "last_activity_ts": runtime_ts,
+            }
+        elif runtime_stage == "exporter":
+            stages["exporter"] = {
+                "state": merged_state,
+                "counter": runtime_metrics,
+                "label": "sent",
+                "last_activity_ts": runtime_ts,
+            }
+        elif runtime_stage == "kafka":
+            stages["kafka"] = {
+                "state": merged_state,
+                "counter": runtime_metrics,
+                "label": "stored",
+                "last_activity_ts": runtime_ts,
+            }
+
+    return stages, latest_exp
 
 
-async def get_new_predictions(pool, after_id: int):
-    sql = """
-    SELECT id, experiment_id, segment_id, prediction, confidence, created_at, model_version
-    FROM gcn_predictions
-    WHERE id > $1
-    ORDER BY id ASC
-    LIMIT 10
-    """
+async def get_new_predictions(
+    pool,
+    after_id: int,
+    experiment_id: Optional[str] = None,
+    limit: int = 50,
+):
+    """Returns new predictions after a DB id, optionally scoped to an experiment."""
+    safe_limit = max(1, min(int(limit), 200))
+    if experiment_id:
+        sql = f"""
+        SELECT id, experiment_id, segment_id, prediction, confidence, created_at, model_version
+        FROM gcn_predictions
+        WHERE id > $1 AND experiment_id = $2
+        ORDER BY id ASC
+        LIMIT {safe_limit}
+        """
+        args = [after_id, experiment_id]
+    else:
+        sql = f"""
+        SELECT id, experiment_id, segment_id, prediction, confidence, created_at, model_version
+        FROM gcn_predictions
+        WHERE id > $1
+        ORDER BY id ASC
+        LIMIT {safe_limit}
+        """
+        args = [after_id]
+
     async with pool.acquire() as conn:
-        return await conn.fetch(sql, after_id)
+        return await conn.fetch(sql, *args)
 
 
 # ── Analysis ──────────────────────────────────────────────────────────────────

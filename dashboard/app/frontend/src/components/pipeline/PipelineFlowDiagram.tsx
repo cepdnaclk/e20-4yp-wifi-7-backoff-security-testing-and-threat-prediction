@@ -1,19 +1,5 @@
 import type { PipelineStages } from '../../types/pipeline'
-
-interface Stage {
-  key: keyof PipelineStages
-  label: string
-  icon: string
-}
-
-const STAGES: Stage[] = [
-  { key: 'ns3',        label: 'NS-3 Sim',    icon: '📡' },
-  { key: 'exporter',   label: 'Exporter',    icon: '📤' },
-  { key: 'kafka',      label: 'Redpanda',    icon: '🔀' },
-  { key: 'windowizer', label: 'Windowizer',  icon: '🪟' },
-  { key: 'gcn',        label: 'GCN Detect',  icon: '🧠' },
-  { key: 'db',         label: 'TimescaleDB', icon: '🗄️' },
-]
+import { PIPELINE_STAGE_META } from './stageMeta'
 
 const STATE_COLOR: Record<string, string> = {
   active: 'var(--color-normal)',
@@ -29,15 +15,25 @@ const STATE_BG: Record<string, string> = {
 
 interface PipelineFlowDiagramProps {
   stages: PipelineStages | null
+  currentStageKey?: keyof PipelineStages | null
 }
 
-export default function PipelineFlowDiagram({ stages }: PipelineFlowDiagramProps) {
+export default function PipelineFlowDiagram({ stages, currentStageKey = null }: PipelineFlowDiagramProps) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {STAGES.map((s, i) => {
+      {PIPELINE_STAGE_META.map((s, i) => {
         const stage = stages?.[s.key]
         const state = stage?.state || 'idle'
         const isActive = state === 'active'
+        const isCurrent = currentStageKey === s.key
+        const isComplete = !isActive && (stage?.counter ?? 0) > 0
+        const statusText = isCurrent
+          ? 'RUNNING NOW'
+          : isActive
+            ? 'RUNNING'
+            : isComplete
+              ? 'COMPLETE'
+              : 'IDLE'
 
         return (
           <div key={s.key} className="flex items-center gap-2">
@@ -47,7 +43,9 @@ export default function PipelineFlowDiagram({ stages }: PipelineFlowDiagramProps
               style={{
                 minWidth: 88,
                 background: STATE_BG[state],
-                boxShadow: isActive
+                boxShadow: isCurrent
+                  ? `0 0 0 3px var(--color-brand), var(--shadow-raised-sm)`
+                  : isActive
                   ? `0 0 0 2px ${STATE_COLOR[state]}33, var(--shadow-raised-sm)`
                   : 'var(--shadow-raised-sm)',
                 border: `1px solid ${STATE_COLOR[state]}44`,
@@ -67,20 +65,23 @@ export default function PipelineFlowDiagram({ stages }: PipelineFlowDiagramProps
                   {stage ? `${stage.counter} ${stage.label}` : 'idle'}
                 </span>
               </div>
+              <div className="text-[10px] font-semibold tracking-wide" style={{ color: isCurrent ? 'var(--color-brand)' : STATE_COLOR[state] }}>
+                {statusText}
+              </div>
             </div>
 
             {/* Connector */}
-            {i < STAGES.length - 1 && (
+            {i < PIPELINE_STAGE_META.length - 1 && (
               <svg width="28" height="16" viewBox="0 0 28 16">
                 <defs>
                   <marker id={`arrow-${i}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                    <path d="M0,0 L6,3 L0,6 Z" fill={isActive ? 'var(--color-brand)' : 'var(--color-subtle)'} />
+                    <path d="M0,0 L6,3 L0,6 Z" fill={isActive || isComplete ? 'var(--color-brand)' : 'var(--color-subtle)'} />
                   </marker>
                 </defs>
                 <line
                   x1="2" y1="8" x2="22" y2="8"
-                  stroke={isActive ? 'var(--color-brand)' : 'var(--color-subtle)'}
-                  strokeWidth={isActive ? 2 : 1.5}
+                  stroke={isActive || isComplete ? 'var(--color-brand)' : 'var(--color-subtle)'}
+                  strokeWidth={isActive || isComplete ? 2 : 1.5}
                   strokeDasharray={isActive ? '4 3' : undefined}
                   markerEnd={`url(#arrow-${i})`}
                   className={isActive ? 'flow-active' : undefined}

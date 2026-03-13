@@ -3,29 +3,54 @@ import {
 } from 'recharts'
 import type { MetricPoint } from '../../types/experiments'
 
+interface SeriesDef {
+  data: MetricPoint[]
+  name: string
+  color: string
+}
+
 interface MetricLineChartProps {
   data: MetricPoint[]
   unit?: string
   color?: string
   height?: number
   name?: string
+  compareData?: MetricPoint[]
+  compareName?: string
 }
 
 function formatTs(ts: string): string {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+function buildChartData(series: SeriesDef[]) {
+  const maxLen = Math.max(...series.map(s => s.data.length))
+  return Array.from({ length: maxLen }, (_, i) => {
+    const row: Record<string, string | number> = {
+      ts: series[0]?.data[i] ? formatTs(series[0].data[i].ts) : '',
+    }
+    series.forEach(s => {
+      row[s.name] = s.data[i] != null ? Number(Number(s.data[i].value).toFixed(4)) : NaN
+    })
+    return row
+  })
 }
 
 export default function MetricLineChart({
   data,
   unit = '',
   color = 'var(--color-brand)',
-  height = 180,
+  height = 200,
   name = 'value',
+  compareData,
+  compareName,
 }: MetricLineChartProps) {
-  const chartData = data.map((p) => ({
-    ts: formatTs(p.ts),
-    value: Number(p.value.toFixed(4)),
-  }))
+  const series: SeriesDef[] = [{ data, name, color }]
+  if (compareData && compareData.length > 0) {
+    series.push({ data: compareData, name: compareName ?? 'compare', color: '#06b6d4' })
+  }
+
+  const chartData = buildChartData(series)
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -42,8 +67,8 @@ export default function MetricLineChart({
           tick={{ fontSize: 10, fill: 'var(--color-muted)' }}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(v: number) => `${v}${unit}`}
-          width={48}
+          tickFormatter={(v: number) => `${v}${unit ? ' ' + unit : ''}`}
+          width={52}
         />
         <Tooltip
           contentStyle={{
@@ -53,17 +78,21 @@ export default function MetricLineChart({
             borderRadius: 10,
             fontSize: 12,
           }}
-          formatter={(v: number) => [`${v} ${unit}`, name]}
+          formatter={(v: number, n: string) => [`${v}${unit ? ' ' + unit : ''}`, n]}
         />
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke={color}
-          strokeWidth={2}
-          dot={false}
-          activeDot={{ r: 4 }}
-          name={name}
-        />
+        {series.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+        {series.map(s => (
+          <Line
+            key={s.name}
+            type="monotone"
+            dataKey={s.name}
+            stroke={s.color}
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4 }}
+            connectNulls={false}
+          />
+        ))}
       </LineChart>
     </ResponsiveContainer>
   )

@@ -96,7 +96,7 @@ export default function ModelSection() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {/* Architecture */}
             {arch && (
               <div className="neu-card">
@@ -134,32 +134,32 @@ export default function ModelSection() {
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Version list */}
-          {modelList && modelList.models.length > 0 && (
-            <div className="neu-card">
-              <div className="section-title text-base mb-3">Model Registry</div>
-              <div className="flex flex-col gap-2">
-                {modelList.models.map((m) => (
-                  <div
-                    key={m.version}
-                    className="neu-inset flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm">{m.version}</span>
-                      {m.is_current && <Badge variant="brand" label="active" />}
+            {/* Version list */}
+            {modelList && modelList.models.length > 0 && (
+              <div className="neu-card">
+                <div className="section-title text-base mb-3">Model Registry</div>
+                <div className="flex flex-col gap-2">
+                  {modelList.models.map((m) => (
+                    <div
+                      key={m.version}
+                      className="neu-inset flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">{m.version}</span>
+                        {m.is_current && <Badge variant="brand" label="active" />}
+                      </div>
+                      {m.test_results && (
+                        <span className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                          F1: {(m.test_results.f1 * 100).toFixed(1)}%
+                        </span>
+                      )}
                     </div>
-                    {m.test_results && (
-                      <span className="text-sm" style={{ color: 'var(--color-muted)' }}>
-                        F1: {(m.test_results.f1 * 100).toFixed(1)}%
-                      </span>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>

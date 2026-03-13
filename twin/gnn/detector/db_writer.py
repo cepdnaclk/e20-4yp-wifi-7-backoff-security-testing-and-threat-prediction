@@ -8,7 +8,7 @@ from psycopg2.extras import execute_batch
 import json
 import logging
 from typing import List, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +48,10 @@ class DatabaseWriter:
         self.user = user
         self.password = password
         self.table = table
-        self.batch_size = batch_size
+        self.batch_size = max(1, int(batch_size))
 
         self.connection = None
+        self.cursor = None
 
         # Buffer for batch inserts
         self.buffer = []
@@ -70,7 +71,7 @@ class DatabaseWriter:
                 user=self.user,
                 password=self.password
             )
-            self.connection.autocommit = False
+            self.cursor = self.connection.cursor()
 
             logger.info(f"Connected to database: {self.dbname}@{self.host}")
             return True
@@ -81,7 +82,7 @@ class DatabaseWriter:
 
     def write_predictions(self, predictions: List[Dict]) -> bool:
         """
-        Write predictions to database.
+        Write predictions to database (buffered).
 
         Args:
             predictions: List of prediction dicts
@@ -93,11 +94,12 @@ class DatabaseWriter:
             # Add to buffer
             self.buffer.extend(predictions)
 
-            # Always flush immediately for real-time streaming.
-            # Batching only makes sense for bulk inserts; in streaming mode
-            # we typically get 1 prediction at a time and would never reach
-            # batch_size, causing silent data loss.
-            return self.flush()
+            # Flush as soon as batch threshold is reached.
+            # For near-real-time behavior set batch_size=1.
+            if len(self.buffer) >= self.batch_size:
+                return self.flush()
+
+            return True
 
         except Exception as e:
             logger.error(f"Error writing predictions: {e}", exc_info=True)
@@ -131,10 +133,11 @@ class DatabaseWriter:
                     pred['model_version'],
                     pred['model_path'],
                     pred.get('inference_time_ms'),
-                    'gcn-detector'
+                    'gcn-detector',
+                    datetime.now(timezone.utc),
                 ))
 
-            # Batch insert using a fresh cursor for each flush
+            # Batch insert
             insert_query = f"""
                 INSERT INTO {self.table} (
                     experiment_id, entity_id, segment_id,
@@ -142,14 +145,13 @@ class DatabaseWriter:
                     window_start_idx, window_end_idx,
                     prediction, confidence, probabilities,
                     model_version, model_path,
-                    inference_time_ms, source
+                    inference_time_ms, source, created_at
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
             """
 
-            with self.connection.cursor() as cursor:
-                execute_batch(cursor, insert_query, values, page_size=self.batch_size)
+            execute_batch(self.cursor, insert_query, values, page_size=self.batch_size)
             self.connection.commit()
 
             logger.info(f"Flushed {len(self.buffer)} predictions to database")
@@ -161,10 +163,7 @@ class DatabaseWriter:
 
         except Exception as e:
             logger.error(f"Error flushing predictions to database: {e}", exc_info=True)
-            try:
-                self.connection.rollback()
-            except Exception:
-                pass
+            self.connection.rollback()
             return False
 
     def close(self):
@@ -175,6 +174,8 @@ class DatabaseWriter:
             # Flush remaining predictions
             self.flush()
 
+            if self.cursor:
+                self.cursor.close()
             if self.connection:
                 self.connection.close()
 
@@ -194,13 +195,8 @@ class DatabaseWriter:
             if self.connection is None:
                 return False
 
-            # Use connection.closed instead of executing a query
-            # to avoid leaving an open transaction (idle in transaction state).
-            if self.connection.closed != 0:
-                return False
-
-            # Poll with a lightweight no-op to detect broken pipes
-            self.connection.poll()
+            # Execute simple query
+            self.cursor.execute("SELECT 1")
             return True
 
         except Exception as e:
