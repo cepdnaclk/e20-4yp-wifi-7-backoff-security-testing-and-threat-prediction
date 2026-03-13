@@ -130,7 +130,7 @@ async def get_experiment_metric_series(
         SELECT ts, value, entity_id, unit FROM (
             SELECT ts, value, entity_id, unit, ROW_NUMBER() OVER (ORDER BY ts) AS rn
             FROM metrics WHERE experiment_id = $1 AND metric_name = $2 AND entity_id = $3
-        ) sub WHERE rn %% $4 = 0 ORDER BY ts
+        ) sub WHERE rn % $4 = 0 ORDER BY ts
         """
         args = [experiment_id, metric_name, entity_id, step]
     else:
@@ -138,7 +138,7 @@ async def get_experiment_metric_series(
         SELECT ts, value, entity_id, unit FROM (
             SELECT ts, value, entity_id, unit, ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY ts) AS rn
             FROM metrics WHERE experiment_id = $1 AND metric_name = $2
-        ) sub WHERE rn %% $3 = 0 ORDER BY ts
+        ) sub WHERE rn % $3 = 0 ORDER BY ts
         """
         args = [experiment_id, metric_name, step]
 

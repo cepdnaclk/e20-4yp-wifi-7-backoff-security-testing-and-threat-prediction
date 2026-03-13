@@ -10,13 +10,13 @@ import { useExperiments, useExperimentSummary, useExperimentPredictions, useMetr
 import type { Experiment } from '../types/experiments'
 
 const METRIC_OPTIONS = [
-  'backoff_slots', 'throughput_mbps', 'packet_loss_rate',
-  'delay_ms', 'channel_busy_ratio',
+  'avg_backoff_slots', 'net_throughput_mbps', 'net_packet_loss_ratio',
+  'net_avg_delay_ms', 'channel_busy_ratio',
 ]
 
 export default function ExperimentSection() {
   const { selectedExperimentId, setSelectedExperimentId, latestExperimentId } = useApp()
-  const [selectedMetric, setSelectedMetric] = useState('backoff_slots')
+  const [selectedMetric, setSelectedMetric] = useState('avg_backoff_slots')
 
   const activeId = selectedExperimentId || latestExperimentId
   const { data: expList, loading: expLoading, error: expError } = useExperiments(50)
