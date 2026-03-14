@@ -33,14 +33,18 @@ services:
       PG_PASS: ${PG_PASS:-udr_pass}
       GCN_REGISTRY_PATH: /registry
       PIPELINE_ACTIVE_STATUS_FILE: /artifacts/.pipeline_active.json
+      # Real host path so docker volume mounts work when make spawns containers
+      HOST_REPO_PATH: ${PWD}
     volumes:
-      # Mount GCN model registry read-only so the dashboard can list versions
-      - ./twin/registry/gcn:/registry:ro
+      # Mount GCN model registry read-write so dashboard can deploy models (update symlink)
+      - ./twin/registry/gcn:/registry
       # Mount ns-3 artifacts read-write — launcher writes status to .pipeline_active.json
       - ./sim/ns3/artifacts:/artifacts
       # Mount repo root so dashboard can launch NS-3 experiments via make
-      # Requires make and ns3 available on host; see WP12 for host-runner alternative
       - .:/repo:ro
+      # Docker socket + CLI binary so dashboard can spawn containers and restart services
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker:ro
     logging:
       driver: json-file
       options:

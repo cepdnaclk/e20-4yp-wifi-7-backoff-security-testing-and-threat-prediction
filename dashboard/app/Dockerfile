@@ -13,9 +13,11 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# System deps
+# System deps — make so the launcher can call 'make run-mlo-*'
+# docker CLI is bind-mounted from host at runtime (/usr/bin/docker:ro)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    make \
   && rm -rf /var/lib/apt/lists/*
 
 # Python deps

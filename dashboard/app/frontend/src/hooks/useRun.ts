@@ -9,6 +9,7 @@ export interface LaunchRequest {
   num_sta: number
   segment_length: 32 | 64 | 128 | 256
   experiment_id?: string
+  gcn_version?: string
 }
 
 export interface RunStatus {
@@ -29,6 +30,7 @@ export interface HistoryEntry {
   num_sta: number
   sim_time: number
   segment_length: number
+  gcn_version?: string
   started_at: string
   completed_at: string | null
   outcome: 'success' | 'failed' | 'cancelled' | 'running'

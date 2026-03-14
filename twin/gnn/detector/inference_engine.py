@@ -99,6 +99,16 @@ class InferenceEngine:
             # Build batched graph
             batch_data = self.graph_builder.build_batch(processed_segments)
 
+            # For v3 models: append segment-length conditioning feature before scaling.
+            # The v3 scaler has 17 dimensions (16 features + log2(L)/8.0).
+            # Compute seg_len per node from the batch assignment tensor.
+            scaler_dim = len(self.feature_processor.scaler_mean)
+            if scaler_dim == 17 and batch_data.x.shape[1] == 16:
+                batch_counts = torch.bincount(batch_data.batch)
+                seg_len_vals = torch.log2(batch_counts.float().clamp(min=1)) / 8.0
+                per_node_seg_len = seg_len_vals[batch_data.batch].unsqueeze(1)
+                batch_data.x = torch.cat([batch_data.x, per_node_seg_len], dim=1)
+
             # Scale features
             batch_data.x = self.feature_processor.scale_features(batch_data.x)
 

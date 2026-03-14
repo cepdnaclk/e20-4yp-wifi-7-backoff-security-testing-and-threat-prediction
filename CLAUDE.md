@@ -6,15 +6,19 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
-Digital twin implementation for Wi-Fi 7 / MLO (Multi-Link Operation) backoff manipulation detection and mitigation. Currently at **WP6 complete** - full telemetry pipeline working.
+Digital twin implementation for Wi-Fi 7 / MLO (Multi-Link Operation) backoff manipulation detection and mitigation. Currently at **WP12 complete** - GCN v3.0.0 multi-AP detector deployed.
 
 ### Current State (Quick)
 ```
-✅ WP1-WP6: Complete pipeline working
-   ns-3 → telemetry.jsonl → Exporter → Kafka → Harmonizer → DB → Grafana
+✅ WP1-WP12: Complete pipeline + GCN v3.0.0 deployed
+   ns-3 (multi-AP nap1-4) → telemetry.jsonl → Exporter → Kafka → Harmonizer → DB
+   Kafka → Windowizer → GCN v3.0.0 → gcn_predictions → Grafana / Dashboard :8888
+   Dashboard: Pipeline Monitor, Experiment View, Attack Analysis, Run Experiment
 
-🔲 WP7: One-command pipeline (NEXT)
-🔲 WP8+: Multi-scenario, security, AI
+GCN v3.0.0: F1=0.9978, Accuracy=99.73%, nap1-4, seg=[32,64,128,256]
+
+🔲 WP13: Closed-loop policy actuation (NEXT)
+          Detector → ZSM/SDN: link steering, channel switching, deauth
 ```
 
 ---
@@ -38,6 +42,7 @@ Digital twin implementation for Wi-Fi 7 / MLO (Multi-Link Operation) backoff man
 | `docs/WP4-TELEMETRY-EXPORTER.md` | File → Kafka |
 | `docs/WP5-HARMONIZER.md` | Kafka → DB |
 | `docs/WP6-GRAFANA-DASHBOARDS.md` | Dashboards |
+| `docs/WP12-GCN-V3-MULTI-AP-TRAINING-PLAN.md` | GCN v3 multi-AP training, dashboard launcher |
 
 ### ADRs (Architecture Decisions)
 All decisions in `docs/adr/` - check before making architectural changes.

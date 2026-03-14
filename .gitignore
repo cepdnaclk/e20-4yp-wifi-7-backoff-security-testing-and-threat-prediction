@@ -48,3 +48,16 @@ clab/**/clab-*/
 # Local Obsidian workspace state
 docs/codex/.obsidian/
 
+# Playwright CLI session artifacts (browser logs, page snapshots)
+.playwright-cli/
+
+# Playwright test output (reports, traces, screenshots, videos)
+test-results/
+tests/node_modules/
+tests/reports/
+tests/test-results/
+
+# Model training intermediates (keep best_model.pt, not checkpoints/logs)
+twin/registry/gcn/*/checkpoints/
+twin/registry/gcn/*/logs/
+
