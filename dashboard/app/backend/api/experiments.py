@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, Query, HTTPException
 from typing import Optional
+from datetime import datetime
 from ..db import queries
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
@@ -28,9 +29,13 @@ async def list_experiments(
     limit: int = Query(50, le=200),
     offset: int = 0,
     prefix: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
 ):
-    rows = await queries.get_experiments(request.app.state.pool, limit, offset, prefix)
-    total = await queries.count_experiments(request.app.state.pool, prefix)
+    dt_from = datetime.fromisoformat(date_from) if date_from else None
+    dt_to = datetime.fromisoformat(date_to) if date_to else None
+    rows = await queries.get_experiments(request.app.state.pool, limit, offset, prefix, dt_from, dt_to)
+    total = await queries.count_experiments(request.app.state.pool, prefix, dt_from, dt_to)
     result = []
     for r in rows:
         seg = r["segment_count"] or 0

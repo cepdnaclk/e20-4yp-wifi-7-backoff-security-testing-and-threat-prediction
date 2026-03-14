@@ -22,7 +22,8 @@ This document provides complete context about the current state of the project. 
 | WP9.5 | ✅ Complete | Unified Grafana dashboard (38 panels, 3 variables) |
 | WP10 | ✅ Complete | Custom web dashboard (React 18 + FastAPI, port 8888) |
 | WP11 | ✅ Complete | Pipeline & DB writer bug fixes (Attack Analysis tab) |
-| WP12 | 🔄 In Progress | GCN v3 multi-AP + multi-length training + dashboard launcher (implementation complete — data collection & training pending) |
+| WP12 | ✅ Complete | GCN v3 multi-AP + multi-length training + dashboard launcher (v3.0.0: F1=0.9978, AUC=1.0000) |
+| WP13 | 🔲 TODO | Closed-loop policy actuation (detector → ZSM/SDN response: link steering, channel switching, deauth) |
 
 ---
 
@@ -50,7 +51,7 @@ Redpanda (Kafka API) — topic: wifi7.telemetry.v0_1
  public.metrics               Kafka: wifi7.ml.windowed_features.v1
         │                              │
         │                              ▼
-        │                       GCN Detector v2.0.0
+        │                       GCN Detector v3.0.0
         │                              │
         │                              ▼
         │                    TimescaleDB public.gcn_predictions
@@ -151,6 +152,14 @@ make run-mlo-exp EXP_ID=... SCENARIO=positive NAP=4 NSTA=8 SEED=43 BIAS=5000
 ```bash
 make gcn-train OUTPUT_DIR=twin/registry/gcn/v3.0.0   # uses training_v3.yaml
 make gcn-deploy VERSION=v3.0.0                         # update current symlink
+```
+
+### Evaluation Utilities (WP12 — 2026-03-14)
+```bash
+make db-reset-experiments     # Truncate gcn_predictions + metrics tables (fresh eval start)
+make db-count                 # Show row counts for gcn_predictions and metrics
+python scripts/run_eval_matrix.py --tier TIER1   # Run a specific evaluation tier
+python scripts/run_eval_matrix.py --dry-run       # Preview experiment list without launching
 ```
 
 ### Dashboard Experiment Launcher (WP12)
@@ -350,11 +359,12 @@ ndt-wifi7-mlo-security/
 │   │   ├── detector/                    # GCN inference service
 │   │   └── trainer/                     # Model training pipeline
 │   └── registry/gcn/
-│       ├── current -> v2.0.0            # Active version symlink
+│       ├── current -> v3.0.0            # Active version symlink
 │       ├── v1.0.0/                      # Baseline model
-│       └── v2.0.0/                      # Production model (balanced)
+│       ├── v2.0.0/                      # Balanced single-AP model
+│       └── v3.0.0/                      # Multi-AP multi-length model (F1=0.9978)
 │           ├── best_model.pt
-│           ├── scaler.json
+│           ├── scaler.json              # 17-dim (16 features + seg-len)
 │           ├── config.yaml
 │           └── test_results.json
 ├── dashboard/app/                       # Custom web dashboard (WP10)
@@ -487,26 +497,63 @@ __pycache__/
 
 ---
 
-## Completed Features Summary (WP10)
+## Completed Features Summary (WP12)
 
-All planned work packages are complete. The platform now provides:
+All work packages through WP12 are complete. The platform now provides:
 
 | Feature | Location | How to access |
 |---------|----------|---------------|
-| Wi-Fi 7 MLO simulation | `sim/ns3/` | `make run-mlo-exp` |
+| Wi-Fi 7 MLO simulation (multi-AP) | `sim/ns3/` | `make run-mlo-exp NAP=2 NSTA=4` |
 | Real-time telemetry pipeline | `telemetry/` | `make pipeline-up` |
 | GCN attack detection | `twin/gnn/` + `security/` | `make gcn-up` |
-| GCN model v2.0.0 | `twin/registry/gcn/v2.0.0/` | Active by default |
+| GCN model v3.0.0 | `twin/registry/gcn/v3.0.0/` | Active (F1=0.9978, multi-AP 1-4) |
 | Unified Grafana dashboard | `clab/configs/grafana/dashboards/` | http://localhost:3000 |
 | Custom web dashboard | `dashboard/app/` | http://localhost:8888 |
+| Dashboard experiment launcher | `dashboard/app/backend/api/run.py` | http://localhost:8888 "Run Experiment" |
 
-## Potential Next Steps (WP11+)
+## GCN v3.0.0 Model Performance
 
-- **Closed-loop actuation**: Feed GCN predictions back to ns-3 controller to suppress attacks
-- **Multi-STA scenarios**: Multiple simultaneous attacker and victim stations
-- **RL policy engine**: Replace rule-based responses with reinforcement learning
-- **Streaming training**: Continuous model updates as new attack patterns are seen
-- **REST API for external integrations**: Expose predictions + metrics to external systems
+Trained on 48 files: 16 Normal (nap1-4) + 32 Attack (nap1-4, 2 attack types), 4 seeds each.
+
+| Metric | Value |
+|--------|-------|
+| Test F1 | **0.9978** |
+| Accuracy | **99.73%** |
+| Precision | **1.0000** (zero false positives) |
+| Recall | **0.9957** (1 missed attack out of 230) |
+| ROC-AUC | **1.0000** |
+| Epochs | 21 (early stopped, patience=20) |
+
+### Evaluation Matrix Results (2026-03-14) — 54/54 PASS
+
+Post-deployment evaluation via `scripts/run_eval_matrix.py` across five tiers. All 54 experiments passed.
+
+| Tier | Description | Pass/Total |
+|------|-------------|-----------|
+| Tier 1 | Core accuracy (v3+v2, 1AP, 256w, seeds A+B) | 12/12 |
+| Tier 2 | Multi-AP scaling (v3, 2AP+4AP) | 6/6 |
+| Tier 3 | Segment length (v3, seg=128+64) | 6/6 |
+| Tier 4 | Bias sensitivity (v3+v2, bias=1000/2000/10000) | 12/12 |
+| Tier 5 | Seed generalisation (v3+v2, groups A–E) | 18/18 |
+
+Key findings: attack\_rate = 0.000 (normal) or 1.000 (attack) across all 54 experiments; both models detect attacks at bias=1000 (one-fifth of training bias). Full report: `docs/EVALUATION-RESULTS-2026-03-14.md`.
+
+Key architectural changes vs v2:
+- `in_channels=17` (16 original features + `log2(L)/8.0` segment-length conditioning feature)
+- Multi-AP normalisation: `net_throughput_mbps / nAp`, MAC/PHY deltas `/ num_sta`
+- Multi-segment-length training: [32, 64, 128, 256] simultaneously
+- Sliding window for 256: stride=64 → 9 segments per 80s run
+
+## Next Steps (WP13)
+
+**WP13: Closed-loop policy actuation** — detector predictions feed back into a ZSM/SDN controller to trigger real-time mitigations:
+- Link steering: redirect traffic away from attacked link
+- Channel switching: move to uncontested channel
+- Deauth: disconnect confirmed attacker stations
+
+Related work deferred from WP12:
+- nap5/6 training data (v3.1.0): use `SIM_TIME=30s` to reduce per-run time from ~2.5h to ~45min
+- Playwright end-to-end test for Run Experiment dashboard section
 
 ---
 
@@ -521,9 +568,118 @@ All planned work packages are complete. The platform now provides:
 - `WP5-HARMONIZER.md` - WP5 details
 - `WP6-GRAFANA-DASHBOARDS.md` - WP6 details
 - `WP7-ONE-COMMAND-PIPELINE.md` - WP7 details
+- `WP12-GCN-V3-MULTI-AP-TRAINING-PLAN.md` - WP12 full plan and results
+- `MODEL-EVALUATION-GUIDE.md` - Evaluation matrix guide and 2026-03-14 results
+- `EVALUATION-RESULTS-2026-03-14.md` - Full 54-experiment evaluation report
 - `.claude/docs/WorkProcess/HOWTORUN.md` - WP7.5 workflow guide
 - `.claude/docs/WorkProcess/WORKFLOW-EXECUTION-OUTPUT.md` - WP7.5 execution outputs
 - `.claude/docs/plans/mlo-attack-dashboard-plan-v2.md` - WP7.5 dashboard plan
+
+---
+
+## WP12: GCN v3 Multi-AP Training (Complete — 2026-03-13)
+
+### Overview
+WP12 extended the GCN attack detector to generalise across multi-AP Wi-Fi 7 topologies and multiple segment window lengths. GCN v3.0.0 was trained and deployed, achieving near-perfect detection performance.
+
+### What Was Implemented
+
+#### 1. NS-3 Multi-AP Simulation Support
+All three NS-3 scenario files (`wifi7-mlo-Normal.cc`, `wifi7-mlo-Positive.cc`, `wifi7-mlo-Negative.cc`) were extended with `--nAp`, `--nSta`, and `--seed` CLI parameters. Each window in the JSON output now carries `num_ap` and `num_sta` fields.
+
+`run_mlo_scenario.sh` gained `NAP`/`NSTA`/`SEED` env vars and a `V3_COLLECT` copy hook. A parallel batch script (`collect_v3_data.sh`) and the `gcn-collect-data` Makefile target were added.
+
+#### 2. Data Collection
+48 JSON files collected in `twin/gnn/training_data/v3/`:
+- Normal: 16 files (nap1-4 x 4 seeds)
+- Attack: 32 files (nap1-4 x 4 seeds x positive+negative)
+
+Each file contains ~800 windows (80s simulation at 0.1s resolution).
+
+#### 3. GCN v3 Training Pipeline
+- `preprocessing.py`: sliding-window segmentation with per-AP normalisation and 17th segment-length conditioning feature (`log2(L)/8.0`)
+- `config.py`: `in_channels=17`, `segment_lengths=[32,64,128,256]`, `multi_ap_normalise=True`
+- `train.py`: multi-length training loop
+- `feature_processor.py`: `build_feature_matrix()` with runtime multi-AP norm + seg-len feature; v2 backward compatible (detected via scaler dimension)
+- `twin/gnn/trainer/training_v3.yaml`: full v3 training configuration
+
+#### 4. GCN v3.0.0 Trained and Deployed
+Model artifacts at `twin/registry/gcn/v3.0.0/`. Registry symlink `current` updated to v3.0.0.
+
+**Test results:**
+| Metric | Value |
+|--------|-------|
+| F1 | **0.9978** |
+| Accuracy | **99.73%** |
+| Precision | **1.0000** |
+| Recall | **0.9957** |
+| ROC-AUC | **1.0000** |
+| Epochs to convergence | 21 (early stop, patience=20) |
+
+#### 5. Dashboard Experiment Launcher
+New "Run Experiment" sidebar section in the web dashboard:
+- Config form: nAp (1-6), scenario, seed, sim_time, bias, segment_length
+- Live stage progress panel (polls `GET /api/run/status` every 2s)
+- Post-run navigation to Experiment View
+- Backend: `POST /api/run/launch`, `GET /api/run/status`, `POST /api/run/cancel`, `GET /api/run/history`
+
+#### 6. Dashboard UI Enhancements (2026-03-14)
+Experiment View improvements added post-WP12:
+- **Date range filter** on `GET /api/experiments`: `start` and `end` query parameters added to `queries.py` and `experiments.py`
+- **Quick range buttons**: Last 30m, Last 1h, Last 2h, Last 6h, Last 24h, All time — visible in ExperimentSection toolbar
+- **See More / See Less toggle**: experiment lists (primary and compare) default to 2 rows (~66px); expand on demand
+- Files changed: `dashboard/app/backend/db/queries.py`, `dashboard/app/backend/api/experiments.py`, `dashboard/app/frontend/src/hooks/useExperiments.ts`, `dashboard/app/frontend/src/sections/ExperimentSection.tsx`
+
+#### 7. Evaluation Tooling (2026-03-14)
+- `scripts/run_eval_matrix.py`: automated 5-tier evaluation runner; `--tier` flag for individual tiers; `--dry-run` for preview; indefinite polling (no hard timeout), `LAUNCH_TIMEOUT=90s`, `POLL_INTERVAL=8s`
+- `make db-reset-experiments`: truncates `gcn_predictions` and `metrics` tables
+- `make db-count`: shows row counts for both tables
+
+### Key Design Decisions (see ADRs)
+- **SIM_TIME=80s**: 80s gives ~800 windows/file; sliding window for 256-length compensates. See ADR-WP12-01.
+- **nap1-4 only for v3.0.0**: nap5/6 deferred (>2.5h per run). See ADR-WP12-02.
+- **17th segment-length feature**: single model handles all four window sizes. See ADR-WP12-03.
+
+### Files Created or Modified
+| File | Change |
+|------|--------|
+| `sim/ns3/scratch/wifi7-mlo-Normal.cc` | Added --nAp, --nSta, --seed; num_ap/num_sta in JSON |
+| `sim/ns3/scratch/wifi7-mlo-Positive.cc` | Same |
+| `sim/ns3/scratch/wifi7-mlo-Negative.cc` | Same |
+| `sim/ns3/scenario/run_mlo_scenario.sh` | NAP/NSTA/SEED env vars; V3_COLLECT hook |
+| `sim/ns3/scenario/collect_v3_data.sh` | New: parallel 72-run batch script |
+| `twin/gnn/detector/gcn_src/data/preprocessing.py` | Sliding window, per-AP norm, 17th feature |
+| `twin/gnn/detector/gcn_src/training/config.py` | in_channels=17, segment_lengths list |
+| `twin/gnn/detector/gcn_src/training/train.py` | Multi-length training loop |
+| `twin/gnn/detector/feature_processor.py` | build_feature_matrix() with v2 compat |
+| `twin/gnn/trainer/training_v3.yaml` | New: v3 training configuration |
+| `twin/registry/gcn/v3.0.0/` | New: trained model artifacts |
+| `twin/registry/gcn/current` | Updated symlink: v2.0.0 → v3.0.0 |
+| `dashboard/app/backend/api/run.py` | New: experiment launcher API |
+| `dashboard/app/backend/main.py` | Registered /api/run router |
+| `docker-compose.dashboard.yml` | /repo:ro mount; /artifacts read-write |
+| `dashboard/app/frontend/src/hooks/useRun.ts` | New: React hooks for run endpoints |
+| `dashboard/app/frontend/src/sections/RunSection.tsx` | New: experiment launcher UI |
+| `dashboard/app/frontend/src/App.tsx` | RunSection wired in |
+| `dashboard/app/frontend/src/components/layout/Sidebar.tsx` | "Run Experiment" nav item |
+| `Makefile` | gcn-collect-data target; NAP/NSTA/NCPU vars; non-interactive Docker flag |
+| `Makefile` | db-reset-experiments + db-count targets (added 2026-03-14) |
+| `scripts/run_eval_matrix.py` | New: 5-tier evaluation runner (added 2026-03-14) |
+| `dashboard/app/backend/db/queries.py` | Date range filter on experiments query (added 2026-03-14) |
+| `dashboard/app/backend/api/experiments.py` | start/end query params for date filter (added 2026-03-14) |
+| `dashboard/app/frontend/src/hooks/useExperiments.ts` | Date range state + quick button logic (added 2026-03-14) |
+| `dashboard/app/frontend/src/sections/ExperimentSection.tsx` | Quick range buttons + See More/Less toggle (added 2026-03-14) |
+
+### Related ADRs
+- ADR-WP12-01: SIM_TIME=80s for v3 training data
+- ADR-WP12-02: nap1-4 only for v3.0.0 (nap5/6 deferred to v3.1.0)
+- ADR-WP12-03: 17th feature for segment-length conditioning
+
+### Known Limitations / Deferred Work
+- nap5/6 coverage: deferred to v3.1.0. Strategy: use SIM_TIME=30s (~45min per run vs 2.5h at SIM_TIME=80s)
+- Playwright end-to-end test for Run Experiment dashboard section: not yet implemented
+- Dashboard frontend rebuild required after new session: `make dashboard-build && make dashboard-up`
+- Minimum-bias lower limit: bias=1000 confirmed detectable; bias=500 / bias=250 not yet tested
 
 ---
 

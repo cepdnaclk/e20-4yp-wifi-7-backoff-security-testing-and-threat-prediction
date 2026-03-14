@@ -73,7 +73,7 @@ harmonizer-build:
 
 exporter-run:
 	@test -n "$(EXP_ID)" || (echo "EXP_ID required" && exit 1)
-	@docker run --rm -it \
+	@docker run --rm $(if $(INTERACTIVE),-it,) \
 	  --network clab-mgmt \
 	  --user "$$(id -u):$$(id -g)" \
 	  -v "$(CURDIR)/sim/ns3/artifacts:/work/sim/ns3/artifacts:ro" \
@@ -427,13 +427,15 @@ gcn-detector-health:
 # GCN Training Pipeline
 # =============================================================================
 
-.PHONY: gcn-trainer-build gcn-train gcn-evaluate gcn-deploy
+.PHONY: gcn-trainer-build gcn-train gcn-train-v3 gcn-evaluate gcn-deploy
 
 GCN_TRAINER_IMAGE=ndt/gcn-trainer:local
 
 gcn-trainer-build:
-	@echo "Building GCN trainer image..."
-	@docker build -t $(GCN_TRAINER_IMAGE) twin/gnn/trainer/
+	@echo "Building GCN trainer image (CUDA)..."
+	@docker build -t $(GCN_TRAINER_IMAGE) \
+		-f twin/gnn/trainer/Dockerfile \
+		twin/gnn/detector/
 
 gcn-train:
 	@test -n "$(OUTPUT_DIR)" || (echo "OUTPUT_DIR required. Example: make gcn-train OUTPUT_DIR=twin/registry/gcn/v1.1.0" && exit 1)
@@ -445,6 +447,22 @@ gcn-train:
 		-v $(CURDIR)/twin/gnn/trainer/training.yaml:/config/training.yaml:ro \
 		$(GCN_TRAINER_IMAGE)
 
+gcn-train-v3:
+	@test -n "$(OUTPUT_DIR)" || (echo "OUTPUT_DIR required. Example: make gcn-train-v3 OUTPUT_DIR=twin/registry/gcn/v3.0.0" && exit 1)
+	@echo "Training GCN v3 (multi-AP, multi-segment-length)..."
+	@echo "Data:   twin/gnn/training_data/v3"
+	@echo "Output: $(OUTPUT_DIR)"
+	@mkdir -p $(CURDIR)/$(OUTPUT_DIR)
+	@docker run --rm --gpus all \
+		--user "$(shell id -u):$(shell id -g)" \
+		-v $(CURDIR)/twin/gnn/training_data/v3:/data:ro \
+		-v $(CURDIR)/$(OUTPUT_DIR):/output \
+		-v $(CURDIR)/twin/gnn/trainer/training_v3.yaml:/config/training_v3.yaml:ro \
+		$(GCN_TRAINER_IMAGE) \
+		--config /config/training_v3.yaml \
+		--data-root /data \
+		--output-dir /output
+
 gcn-evaluate:
 	@test -n "$(MODEL)" || (echo "MODEL required. Example: make gcn-evaluate MODEL=v1.0.0" && exit 1)
 	@echo "Evaluating model $(MODEL)..."
@@ -455,7 +473,7 @@ gcn-evaluate:
 gcn-deploy:
 	@test -n "$(VERSION)" || (echo "VERSION required. Example: make gcn-deploy VERSION=v1.0.0" && exit 1)
 	@echo "Deploying model version $(VERSION)..."
-	@cd twin/registry/gcn && ln -sf $(VERSION) current
+	@cd twin/registry/gcn && rm -f current && ln -s $(VERSION) current
 	@echo "Model $(VERSION) is now active."
 	@echo "GCN detector will reload the model automatically."
 
@@ -536,6 +554,21 @@ dashboard-status:
 	@echo ""
 	@echo "Last 20 log lines:"
 	@docker compose -f docker-compose.dashboard.yml logs --tail=20 dashboard
+
+## ── DB Utilities ──────────────────────────────────────────────────────────────
+
+DB_CONTAINER ?= clab-ndt-wifi7-mlo-security-udr-db
+
+db-reset-experiments:
+	@echo "Clearing experiment data (metrics + gcn_predictions)..."
+	@echo "Model registry and model files are preserved."
+	@docker exec $(DB_CONTAINER) psql -U $(PG_USER) -d $(PG_DB) -c \
+		"TRUNCATE TABLE gcn_predictions; TRUNCATE TABLE metrics;"
+	@echo "Done. DB is clean for fresh evaluation runs."
+
+db-count:
+	@docker exec $(DB_CONTAINER) psql -U $(PG_USER) -d $(PG_DB) -c \
+		"SELECT 'metrics' AS tbl, COUNT(*) FROM metrics UNION ALL SELECT 'gcn_predictions', COUNT(*) FROM gcn_predictions;"
 
 dashboard-dev:
 	@echo "Starting dashboard in DEV mode (hot-reload)..."

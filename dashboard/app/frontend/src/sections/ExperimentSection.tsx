@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useApp } from '../context/AppContext'
 import SectionTitle from '../components/common/SectionTitle'
 import KpiCard from '../components/common/KpiCard'
@@ -25,18 +25,61 @@ const METRIC_COLORS: Record<string, string> = {
   channel_busy_ratio:    '#a78bfa',
 }
 
+function toLocalDatetimeValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+const QUICK_RANGES = [
+  { label: '30m', hours: 0.5 },
+  { label: '1h',  hours: 1   },
+  { label: '2h',  hours: 2   },
+  { label: '6h',  hours: 6   },
+  { label: '24h', hours: 24  },
+] as const
+
 export default function ExperimentSection() {
   const { selectedExperimentId, setSelectedExperimentId, latestExperimentId } = useApp()
   const [selectedMetric, setSelectedMetric] = useState('avg_backoff_slots')
   const [compareId, setCompareId] = useState<string | null>(null)
   const [compareMode, setCompareMode] = useState(false)
 
+  // Date range filter — default: last 24h
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date(); d.setHours(d.getHours() - 24); return toLocalDatetimeValue(d)
+  })
+  const [dateTo, setDateTo] = useState(() => toLocalDatetimeValue(new Date()))
+  // Track which quick range button is active (null = custom / all time)
+  const [activeRange, setActiveRange] = useState<number | null>(24)
+
+  function applyQuickRange(hours: number) {
+    const now = new Date()
+    const from = new Date(now.getTime() - hours * 60 * 60 * 1000)
+    setDateFrom(toLocalDatetimeValue(from))
+    setDateTo(toLocalDatetimeValue(now))
+    setActiveRange(hours)
+  }
+
+  function clearRange() {
+    setDateFrom('')
+    setDateTo('')
+    setActiveRange(null)
+  }
+
   const activeId = selectedExperimentId || latestExperimentId
-  const { data: expList, loading: expLoading, error: expError } = useExperiments(50)
+  const { data: expList, loading: expLoading, error: expError } = useExperiments(
+    200,
+    undefined,
+    dateFrom ? new Date(dateFrom).toISOString() : undefined,
+    dateTo ? new Date(dateTo).toISOString() : undefined,
+  )
   const { data: summary } = useExperimentSummary(activeId)
   const { data: preds } = useExperimentPredictions(activeId)
   const { data: series } = useMetricSeries(activeId, selectedMetric)
   const { data: compareSeries } = useMetricSeries(compareMode ? compareId : null, selectedMetric)
+
+  const [showAllPrimary, setShowAllPrimary] = useState(false)
+  const [showAllCompare, setShowAllCompare] = useState(false)
 
   const experiments: Experiment[] = expList?.experiments || []
 
@@ -60,9 +103,57 @@ export default function ExperimentSection() {
             {compareMode ? 'Compare ON' : 'Compare'}
           </button>
         </div>
+        {/* Date range filter */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          {/* Quick range buttons */}
+          {QUICK_RANGES.map(({ label, hours }) => (
+            <button
+              key={hours}
+              className={`neu-btn text-xs py-1 px-2.5 ${activeRange === hours ? 'neu-btn-primary' : ''}`}
+              onClick={() => applyQuickRange(hours)}
+            >
+              Last {label}
+            </button>
+          ))}
+          <button
+            className={`neu-btn text-xs py-1 px-2.5 ${activeRange === null && !dateFrom && !dateTo ? 'neu-btn-primary' : ''}`}
+            onClick={clearRange}
+          >
+            All time
+          </button>
+
+          {/* Divider */}
+          <span className="text-xs opacity-20" style={{ color: 'var(--color-muted)' }}>|</span>
+
+          {/* Manual date inputs */}
+          <div className="neu-inset flex items-center gap-2 px-2 py-1">
+            <span className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>FROM</span>
+            <input
+              type="datetime-local"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setActiveRange(null) }}
+              className="bg-transparent text-xs font-mono outline-none"
+              style={{ color: 'var(--color-text)' }}
+            />
+          </div>
+          <div className="neu-inset flex items-center gap-2 px-2 py-1">
+            <span className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>TO</span>
+            <input
+              type="datetime-local"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setActiveRange(null) }}
+              className="bg-transparent text-xs font-mono outline-none"
+              style={{ color: 'var(--color-text)' }}
+            />
+          </div>
+        </div>
+
         {expLoading && <LoadingSpinner message="Loading experiments…" />}
         {expError && <ErrorBanner message={expError} />}
-        <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto">
+        <div
+          className="flex flex-wrap gap-2 overflow-hidden transition-all"
+          style={{ maxHeight: showAllPrimary ? 'none' : '66px' }}
+        >
           {experiments.map((e) => (
             <button
               key={e.experiment_id}
@@ -77,28 +168,54 @@ export default function ExperimentSection() {
             </button>
           ))}
         </div>
+        {experiments.length > 0 && (
+          <button
+            className="neu-btn text-xs py-0.5 px-2 mt-2 self-start"
+            style={{ color: 'var(--color-brand)' }}
+            onClick={() => setShowAllPrimary(v => !v)}
+          >
+            {showAllPrimary ? 'See less ▲' : `See more (${experiments.length}) ▼`}
+          </button>
+        )}
 
         {/* Compare experiment picker */}
         {compareMode && (
           <>
             <div className="section-title text-sm mt-4 mb-2">Compare With</div>
-            <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto">
-              {experiments
-                .filter(e => e.experiment_id !== activeId)
-                .map((e) => (
-                  <button
-                    key={e.experiment_id}
-                    className={`neu-btn text-xs ${compareId === e.experiment_id ? 'neu-btn-primary' : ''}`}
-                    onClick={() => setCompareId(id => id === e.experiment_id ? null : e.experiment_id)}
+            {(() => {
+              const compareList = experiments.filter(e => e.experiment_id !== activeId)
+              return (
+                <>
+                  <div
+                    className="flex flex-wrap gap-2 overflow-hidden transition-all"
+                    style={{ maxHeight: showAllCompare ? 'none' : '66px' }}
                   >
-                    {e.experiment_id.split('-').slice(-3).join('-')}
-                    <Badge
-                      variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
-                      label={e.inferred_type}
-                    />
-                  </button>
-                ))}
-            </div>
+                    {compareList.map((e) => (
+                      <button
+                        key={e.experiment_id}
+                        className={`neu-btn text-xs ${compareId === e.experiment_id ? 'neu-btn-primary' : ''}`}
+                        onClick={() => setCompareId(id => id === e.experiment_id ? null : e.experiment_id)}
+                      >
+                        {e.experiment_id.split('-').slice(-3).join('-')}
+                        <Badge
+                          variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
+                          label={e.inferred_type}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  {compareList.length > 0 && (
+                    <button
+                      className="neu-btn text-xs py-0.5 px-2 mt-2 self-start"
+                      style={{ color: 'var(--color-brand)' }}
+                      onClick={() => setShowAllCompare(v => !v)}
+                    >
+                      {showAllCompare ? 'See less ▲' : `See more (${compareList.length}) ▼`}
+                    </button>
+                  )}
+                </>
+              )
+            })()}
           </>
         )}
       </div>
