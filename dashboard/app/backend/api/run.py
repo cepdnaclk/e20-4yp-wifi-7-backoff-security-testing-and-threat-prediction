@@ -28,6 +28,7 @@ class LaunchRequest(BaseModel):
     num_sta: int = Field(2, ge=1, le=12)
     segment_length: int = Field(256, description="32 | 64 | 128 | 256")
     experiment_id: Optional[str] = None   # auto-generated if not provided
+    gcn_version: Optional[str] = None     # e.g. "v3.0.0" — deploy before running
 
     @validator('scenario')
     def validate_scenario(cls, v):
@@ -64,6 +65,7 @@ class HistoryEntry(BaseModel):
     num_sta: int
     sim_time: float
     segment_length: int
+    gcn_version: Optional[str] = None
     started_at: str
     completed_at: Optional[str]
     outcome: str   # "success" | "failed" | "cancelled" | "running"
@@ -138,8 +140,13 @@ async def _run_experiment(req: LaunchRequest, exp_id: str):
     # Determine repo root (dashboard runs from /app inside container,
     # but run_mlo_scenario.sh lives on the host — use make which is volume-mounted)
     # Use 'make run-mlo-exp-stream' which chains NS-3 → exporter → harmonizer
+    # HOST_REPO_PATH is the real host filesystem path (e.g. /home/user/ndt-wifi7-mlo-security).
+    # Without it, CURDIR inside the container is /repo, which docker daemon can't mount.
+    host_repo = os.environ.get("HOST_REPO_PATH", "/repo")
     cmd = [
-        "make", "run-mlo-exp-stream",
+        "make",
+        f"CURDIR={host_repo}",   # override so docker volume mounts use host path
+        "run-mlo-exp-stream",
         f"EXP_ID={exp_id}",
         f"SCENARIO={scenario_arg}",
         f"NAP={req.num_ap}",
@@ -159,6 +166,7 @@ async def _run_experiment(req: LaunchRequest, exp_id: str):
         "num_sta": req.num_sta,
         "sim_time": req.sim_time,
         "segment_length": req.segment_length,
+        "gcn_version": req.gcn_version,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "completed_at": None,
         "outcome": "running",
@@ -166,6 +174,33 @@ async def _run_experiment(req: LaunchRequest, exp_id: str):
     _run_history.insert(0, entry)
     if len(_run_history) > 20:
         _run_history.pop()
+
+    # Deploy requested GCN version before running
+    if req.gcn_version:
+        try:
+            from ..registry import reader as _reader
+            import socket as _socket
+            registry_path = _reader.get_registry_path()
+            current_link = registry_path / "current"
+            if current_link.is_symlink() or current_link.exists():
+                current_link.unlink()
+            current_link.symlink_to(req.gcn_version)
+            # Restart detector via docker socket
+            try:
+                sock = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+                sock.settimeout(10)
+                sock.connect("/var/run/docker.sock")
+                sock.sendall(
+                    b"POST /containers/ndt-pipeline-gcn-detector/restart HTTP/1.0\r\n"
+                    b"Host: localhost\r\nContent-Length: 0\r\n\r\n"
+                )
+                sock.recv(256)
+                sock.close()
+                await asyncio.sleep(5)  # wait for detector to come back up
+            except Exception as de:
+                logger.warning(f"Could not restart detector: {de}")
+        except Exception as e:
+            logger.warning(f"Could not deploy gcn_version {req.gcn_version}: {e}")
 
     try:
         _write_status(exp_id, "ns3", "active", "Simulation starting…")
