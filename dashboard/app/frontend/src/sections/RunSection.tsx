@@ -20,6 +20,7 @@ const SCENARIO_OPTIONS = [
   { value: 'normal',   label: 'Normal',     description: 'No attack' },
   { value: 'positive', label: 'Attack (+)', description: '+bias' },
   { value: 'negative', label: 'Attack (−)', description: '−bias' },
+  { value: 'dynamic',  label: 'Dynamic',    description: 'phase schedule' },
 ] as const
 
 const SEGMENT_LENGTHS = [32, 64, 128, 256] as const
@@ -38,7 +39,8 @@ export default function RunSection() {
   const { data: modelList } = useModels()
 
   // Form state
-  const [scenario, setScenario] = useState<'normal' | 'positive' | 'negative'>('positive')
+  const [scenario, setScenario] = useState<'normal' | 'positive' | 'negative' | 'dynamic'>('positive')
+  const [phases, setPhases] = useState('0:0,20:5000,40:-5000,60:0')
   const [seed, setSeed] = useState(42)
   const [simTime, setSimTime] = useState(80)
   const [bias, setBias] = useState(5000)
@@ -91,12 +93,13 @@ export default function RunSection() {
         scenario,
         seed,
         sim_time: simTime,
-        bias: scenario === 'normal' ? 0 : bias,
+        bias: scenario === 'normal' || scenario === 'dynamic' ? 0 : bias,
         num_ap: numAp,
         num_sta: numSta,
         segment_length: segmentLength,
         experiment_id: customExpId || undefined,
         gcn_version: gcnVersion || undefined,
+        phases: scenario === 'dynamic' ? phases : undefined,
       }
       await launchExperiment(req)
       refresh()
@@ -189,17 +192,19 @@ export default function RunSection() {
               />
             </div>
 
-            {/* BIAS */}
-            <div className="neu-inset flex flex-col gap-1 p-2.5" style={{ opacity: scenario === 'normal' ? 0.4 : 1 }}>
-              <label className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>BIAS</label>
-              <input
-                type="number" step={500}
-                value={scenario === 'normal' ? 0 : bias}
-                disabled={scenario === 'normal'}
-                onChange={(e) => setBias(Number(e.target.value))}
-                className="bg-transparent text-sm font-mono outline-none w-full"
-              />
-            </div>
+            {/* BIAS — hidden for dynamic (phases control bias) */}
+            {scenario !== 'dynamic' && (
+              <div className="neu-inset flex flex-col gap-1 p-2.5" style={{ opacity: scenario === 'normal' ? 0.4 : 1 }}>
+                <label className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>BIAS</label>
+                <input
+                  type="number" step={500}
+                  value={scenario === 'normal' ? 0 : bias}
+                  disabled={scenario === 'normal'}
+                  onChange={(e) => setBias(Number(e.target.value))}
+                  className="bg-transparent text-sm font-mono outline-none w-full"
+                />
+              </div>
+            )}
 
             {/* APs */}
             <div className="neu-inset flex flex-col gap-1 p-2.5">
@@ -231,6 +236,27 @@ export default function RunSection() {
               {launching ? 'Launching…' : '▶ Launch'}
             </button>
           </div>
+
+          {/* Phase schedule — shown only for dynamic scenario */}
+          {scenario === 'dynamic' && (
+            <div className="neu-inset flex flex-col gap-1.5 p-2.5">
+              <label className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>
+                PHASE SCHEDULE
+                <span className="ml-2 font-normal opacity-60">time:bias pairs, comma-separated</span>
+              </label>
+              <input
+                type="text"
+                value={phases}
+                onChange={(e) => setPhases(e.target.value)}
+                placeholder="0:0,20:5000,40:-5000,60:0"
+                className="bg-transparent text-sm font-mono outline-none w-full"
+              />
+              <div className="text-xs opacity-50">
+                Each pair is <code>time:bias</code> (seconds:CW-bias). First entry must be <code>0:…</code>.
+                Examples: <code>0:0,20:5000</code> (normal then +attack) · <code>0:5000,40:-5000</code> (+ then − attack)
+              </div>
+            </div>
+          )}
 
           {/* Seed explanation */}
           {showSeedHelp && (

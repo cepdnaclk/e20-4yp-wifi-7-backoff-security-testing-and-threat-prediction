@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 export interface LaunchRequest {
-  scenario: 'normal' | 'positive' | 'negative'
+  scenario: 'normal' | 'positive' | 'negative' | 'dynamic'
   seed: number
   sim_time: number
   bias: number
@@ -10,6 +10,7 @@ export interface LaunchRequest {
   segment_length: 32 | 64 | 128 | 256
   experiment_id?: string
   gcn_version?: string
+  phases?: string   // dynamic scenario only: "t0:b0,t1:b1,..." e.g. "0:0,20:5000,40:-5000"
 }
 
 export interface RunStatus {
