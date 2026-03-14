@@ -9,6 +9,32 @@ import MetricLineChart from '../components/charts/MetricLineChart'
 import { useExperiments, useExperimentSummary, useExperimentPredictions, useMetricSeries } from '../hooks/useExperiments'
 import type { Experiment } from '../types/experiments'
 
+function expAP(id: string): string {
+  const m = id.match(/[_-](\d+)ap/i)
+  return m ? `${m[1]}AP` : ''
+}
+
+function expDuration(e: { first_ts: string | null; last_ts: string | null }): string {
+  if (!e.first_ts || !e.last_ts) return ''
+  const s = Math.round((new Date(e.last_ts).getTime() - new Date(e.first_ts).getTime()) / 1000)
+  return s > 0 ? `${s}s` : ''
+}
+
+function ExpMeta({ e }: { e: import('../types/experiments').Experiment }) {
+  const parts = [
+    expAP(e.experiment_id),
+    e.segment_count > 0 ? `${e.segment_count}seg` : null,
+    e.model_version ?? null,
+    expDuration(e),
+  ].filter(Boolean)
+  if (parts.length === 0) return null
+  return (
+    <span className="block text-xs font-normal mt-0.5 opacity-60 tracking-tight">
+      {parts.join(' · ')}
+    </span>
+  )
+}
+
 const METRIC_OPTIONS = [
   'avg_backoff_slots', 'net_throughput_mbps', 'net_packet_loss_ratio',
   'net_avg_delay_ms',  'net_avg_jitter_ms',   'net_active_flows',
@@ -157,14 +183,17 @@ export default function ExperimentSection() {
           {experiments.map((e) => (
             <button
               key={e.experiment_id}
-              className={`neu-btn text-xs ${activeId === e.experiment_id ? 'neu-btn-primary' : ''}`}
+              className={`neu-btn text-xs text-left ${activeId === e.experiment_id ? 'neu-btn-primary' : ''}`}
               onClick={() => setSelectedExperimentId(e.experiment_id)}
             >
-              {e.experiment_id.split('-').slice(-3).join('-')}
-              <Badge
-                variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
-                label={e.inferred_type}
-              />
+              <span className="flex items-center gap-1.5">
+                {e.experiment_id.split('-').slice(-3).join('-')}
+                <Badge
+                  variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
+                  label={e.inferred_type}
+                />
+              </span>
+              <ExpMeta e={e} />
             </button>
           ))}
         </div>
@@ -193,14 +222,17 @@ export default function ExperimentSection() {
                     {compareList.map((e) => (
                       <button
                         key={e.experiment_id}
-                        className={`neu-btn text-xs ${compareId === e.experiment_id ? 'neu-btn-primary' : ''}`}
+                        className={`neu-btn text-xs text-left ${compareId === e.experiment_id ? 'neu-btn-primary' : ''}`}
                         onClick={() => setCompareId(id => id === e.experiment_id ? null : e.experiment_id)}
                       >
-                        {e.experiment_id.split('-').slice(-3).join('-')}
-                        <Badge
-                          variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
-                          label={e.inferred_type}
-                        />
+                        <span className="flex items-center gap-1.5">
+                          {e.experiment_id.split('-').slice(-3).join('-')}
+                          <Badge
+                            variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
+                            label={e.inferred_type}
+                          />
+                        </span>
+                        <ExpMeta e={e} />
                       </button>
                     ))}
                   </div>
