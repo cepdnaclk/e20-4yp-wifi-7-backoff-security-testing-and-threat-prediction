@@ -35,6 +35,92 @@ function ExpMeta({ e }: { e: import('../types/experiments').Experiment }) {
   )
 }
 
+type ScenarioFilter = 'all' | 'normal' | 'positive' | 'negative'
+type ApFilter = 'all' | string   // e.g. '1AP', '2AP', …
+
+function expScenario(id: string): ScenarioFilter {
+  const l = id.toLowerCase()
+  if (l.includes('positive')) return 'positive'
+  if (l.includes('negative')) return 'negative'
+  if (l.includes('normal'))   return 'normal'
+  return 'all'
+}
+
+function filterExps(
+  list: import('../types/experiments').Experiment[],
+  scenario: ScenarioFilter,
+  ap: ApFilter,
+): import('../types/experiments').Experiment[] {
+  return list.filter(e => {
+    if (scenario !== 'all' && expScenario(e.experiment_id) !== scenario) return false
+    if (ap !== 'all' && expAP(e.experiment_id) !== ap) return false
+    return true
+  })
+}
+
+function FilterBar({
+  experiments,
+  scenario, setScenario,
+  ap, setAp,
+}: {
+  experiments: import('../types/experiments').Experiment[]
+  scenario: ScenarioFilter
+  setScenario: (v: ScenarioFilter) => void
+  ap: ApFilter
+  setAp: (v: ApFilter) => void
+}) {
+  const apOptions = useMemo(() => {
+    const seen = new Set<string>()
+    experiments.forEach(e => { const a = expAP(e.experiment_id); if (a) seen.add(a) })
+    return Array.from(seen).sort((a, b) => parseInt(a) - parseInt(b))
+  }, [experiments])
+
+  const scenarioBtns: { label: string; value: ScenarioFilter }[] = [
+    { label: 'All',      value: 'all'      },
+    { label: 'Normal',   value: 'normal'   },
+    { label: 'Positive', value: 'positive' },
+    { label: 'Negative', value: 'negative' },
+  ]
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-3">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {scenarioBtns.map(b => (
+          <button
+            key={b.value}
+            className={`neu-btn text-xs py-0.5 px-2 ${scenario === b.value ? 'neu-btn-primary' : ''}`}
+            onClick={() => setScenario(b.value)}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+      {apOptions.length > 1 && (
+        <>
+          <span className="text-xs opacity-20" style={{ color: 'var(--color-muted)' }}>|</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              className={`neu-btn text-xs py-0.5 px-2 ${ap === 'all' ? 'neu-btn-primary' : ''}`}
+              onClick={() => setAp('all')}
+            >
+              All AP
+            </button>
+            {apOptions.map(a => (
+              <button
+                key={a}
+                className={`neu-btn text-xs py-0.5 px-2 ${ap === a ? 'neu-btn-primary' : ''}`}
+                onClick={() => setAp(a)}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function PredTable({
   predictions,
   label,
@@ -164,7 +250,21 @@ export default function ExperimentSection() {
   const [showAllPrimary, setShowAllPrimary] = useState(false)
   const [showAllCompare, setShowAllCompare] = useState(false)
 
+  // Scenario + AP filters — independent for primary and compare pickers
+  const [primaryScenario, setPrimaryScenario] = useState<ScenarioFilter>('all')
+  const [primaryAp, setPrimaryAp] = useState<ApFilter>('all')
+  const [compareScenario, setCompareScenario] = useState<ScenarioFilter>('all')
+  const [compareAp, setCompareAp] = useState<ApFilter>('all')
+
   const experiments: Experiment[] = expList?.experiments || []
+  const primaryFiltered = useMemo(
+    () => filterExps(experiments, primaryScenario, primaryAp),
+    [experiments, primaryScenario, primaryAp],
+  )
+  const compareFiltered = useMemo(
+    () => filterExps(experiments.filter(e => e.experiment_id !== activeId), compareScenario, compareAp),
+    [experiments, activeId, compareScenario, compareAp],
+  )
 
   const primaryLabel = activeId ? activeId.split('-').slice(-3).join('-') : ''
   const compareLabel = compareId ? compareId.split('-').slice(-3).join('-') : ''
@@ -233,11 +333,16 @@ export default function ExperimentSection() {
 
         {expLoading && <LoadingSpinner message="Loading experiments…" />}
         {expError && <ErrorBanner message={expError} />}
+        <FilterBar
+          experiments={experiments}
+          scenario={primaryScenario} setScenario={setPrimaryScenario}
+          ap={primaryAp} setAp={setPrimaryAp}
+        />
         <div
           className="flex flex-wrap gap-2 overflow-hidden transition-all"
-          style={{ maxHeight: showAllPrimary ? 'none' : '66px' }}
+          style={{ maxHeight: showAllPrimary ? 'none' : '110px' }}
         >
-          {experiments.map((e) => (
+          {primaryFiltered.map((e) => (
             <button
               key={e.experiment_id}
               className={`neu-btn text-xs text-left ${activeId === e.experiment_id ? 'neu-btn-primary' : ''}`}
@@ -253,14 +358,17 @@ export default function ExperimentSection() {
               <ExpMeta e={e} />
             </button>
           ))}
+          {primaryFiltered.length === 0 && (
+            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>No experiments match the selected filters.</span>
+          )}
         </div>
-        {experiments.length > 0 && (
+        {primaryFiltered.length > 0 && (
           <button
             className="neu-btn text-xs py-0.5 px-2 mt-2 self-start"
             style={{ color: 'var(--color-brand)' }}
             onClick={() => setShowAllPrimary(v => !v)}
           >
-            {showAllPrimary ? 'See less ▲' : `See more (${experiments.length}) ▼`}
+            {showAllPrimary ? 'See less ▲' : `See more (${primaryFiltered.length}) ▼`}
           </button>
         )}
 
@@ -268,43 +376,44 @@ export default function ExperimentSection() {
         {compareMode && (
           <>
             <div className="section-title text-sm mt-4 mb-2">Compare With</div>
-            {(() => {
-              const compareList = experiments.filter(e => e.experiment_id !== activeId)
-              return (
-                <>
-                  <div
-                    className="flex flex-wrap gap-2 overflow-hidden transition-all"
-                    style={{ maxHeight: showAllCompare ? 'none' : '66px' }}
-                  >
-                    {compareList.map((e) => (
-                      <button
-                        key={e.experiment_id}
-                        className={`neu-btn text-xs text-left ${compareId === e.experiment_id ? 'neu-btn-primary' : ''}`}
-                        onClick={() => setCompareId(id => id === e.experiment_id ? null : e.experiment_id)}
-                      >
-                        <span className="flex items-center gap-1.5">
-                          {e.experiment_id.split('-').slice(-3).join('-')}
-                          <Badge
-                            variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
-                            label={e.inferred_type}
-                          />
-                        </span>
-                        <ExpMeta e={e} />
-                      </button>
-                    ))}
-                  </div>
-                  {compareList.length > 0 && (
-                    <button
-                      className="neu-btn text-xs py-0.5 px-2 mt-2 self-start"
-                      style={{ color: 'var(--color-brand)' }}
-                      onClick={() => setShowAllCompare(v => !v)}
-                    >
-                      {showAllCompare ? 'See less ▲' : `See more (${compareList.length}) ▼`}
-                    </button>
-                  )}
-                </>
-              )
-            })()}
+            <FilterBar
+              experiments={experiments.filter(e => e.experiment_id !== activeId)}
+              scenario={compareScenario} setScenario={setCompareScenario}
+              ap={compareAp} setAp={setCompareAp}
+            />
+            <div
+              className="flex flex-wrap gap-2 overflow-hidden transition-all"
+              style={{ maxHeight: showAllCompare ? 'none' : '110px' }}
+            >
+              {compareFiltered.map((e) => (
+                <button
+                  key={e.experiment_id}
+                  className={`neu-btn text-xs text-left ${compareId === e.experiment_id ? 'neu-btn-primary' : ''}`}
+                  onClick={() => setCompareId(id => id === e.experiment_id ? null : e.experiment_id)}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {e.experiment_id.split('-').slice(-3).join('-')}
+                    <Badge
+                      variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
+                      label={e.inferred_type}
+                    />
+                  </span>
+                  <ExpMeta e={e} />
+                </button>
+              ))}
+              {compareFiltered.length === 0 && (
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>No experiments match the selected filters.</span>
+              )}
+            </div>
+            {compareFiltered.length > 0 && (
+              <button
+                className="neu-btn text-xs py-0.5 px-2 mt-2 self-start"
+                style={{ color: 'var(--color-brand)' }}
+                onClick={() => setShowAllCompare(v => !v)}
+              >
+                {showAllCompare ? 'See less ▲' : `See more (${compareFiltered.length}) ▼`}
+              </button>
+            )}
           </>
         )}
       </div>
