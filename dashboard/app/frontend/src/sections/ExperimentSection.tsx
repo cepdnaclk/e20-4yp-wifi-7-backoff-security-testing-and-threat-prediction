@@ -35,6 +35,62 @@ function ExpMeta({ e }: { e: import('../types/experiments').Experiment }) {
   )
 }
 
+function PredTable({
+  predictions,
+  label,
+  accentColor,
+}: {
+  predictions: import('../types/experiments').Prediction[]
+  label?: string
+  accentColor?: string
+}) {
+  return (
+    <div className="overflow-x-auto">
+      {label && (
+        <div className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: accentColor }}>
+          <span>●</span> {label}
+        </div>
+      )}
+      <table className="w-full text-sm">
+        <thead>
+          <tr>
+            {['#', 'Prediction', 'Confidence', 'Window', 'Inference (ms)'].map((h) => (
+              <th
+                key={h}
+                className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-wider"
+                style={{ color: 'var(--color-muted)', borderBottom: '1px solid rgba(166,180,200,0.3)' }}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {predictions.slice(0, 50).map((p) => (
+            <tr
+              key={p.id}
+              style={{
+                borderBottom: '1px solid rgba(166,180,200,0.15)',
+                background: p.prediction === 1 ? 'rgba(232,93,106,0.04)' : undefined,
+              }}
+            >
+              <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>{p.segment_number}</td>
+              <td className="py-2 px-3">
+                <Badge variant={p.prediction === 1 ? 'attack' : 'normal'} label={p.prediction_label} />
+              </td>
+              <td className="py-2 px-3 font-semibold">{(p.confidence * 100).toFixed(1)}%</td>
+              <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>
+                {p.window_start_idx}–{p.window_end_idx}
+              </td>
+              <td className="py-2 px-3 text-xs">{p.inference_time_ms?.toFixed(2) ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 const METRIC_OPTIONS = [
   'avg_backoff_slots', 'net_throughput_mbps', 'net_packet_loss_ratio',
   'net_avg_delay_ms',  'net_avg_jitter_ms',   'net_active_flows',
@@ -101,6 +157,7 @@ export default function ExperimentSection() {
   )
   const { data: summary } = useExperimentSummary(activeId)
   const { data: preds } = useExperimentPredictions(activeId)
+  const { data: comparePreds } = useExperimentPredictions(compareMode ? compareId : null)
   const { data: series } = useMetricSeries(activeId, selectedMetric)
   const { data: compareSeries } = useMetricSeries(compareMode ? compareId : null, selectedMetric)
 
@@ -317,43 +374,25 @@ export default function ExperimentSection() {
             )}
           </div>
 
-          {/* Predictions table */}
+          {/* Predictions table — single or side-by-side in compare mode */}
           {preds && preds.predictions.length > 0 && (
             <div className="neu-card overflow-hidden">
               <div className="section-title text-base mb-3">Segment Predictions</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr>
-                      {['#', 'Prediction', 'Confidence', 'Window', 'Inference (ms)'].map((h) => (
-                        <th key={h} className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)', borderBottom: '1px solid rgba(166,180,200,0.3)' }}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preds.predictions.slice(0, 50).map((p) => (
-                      <tr
-                        key={p.id}
-                        style={{
-                          borderBottom: '1px solid rgba(166,180,200,0.15)',
-                          background: p.prediction === 1 ? 'rgba(232,93,106,0.04)' : undefined,
-                        }}
-                      >
-                        <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>{p.segment_number}</td>
-                        <td className="py-2 px-3">
-                          <Badge variant={p.prediction === 1 ? 'attack' : 'normal'} label={p.prediction_label} />
-                        </td>
-                        <td className="py-2 px-3 font-semibold">{(p.confidence * 100).toFixed(1)}%</td>
-                        <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {p.window_start_idx}–{p.window_end_idx}
-                        </td>
-                        <td className="py-2 px-3 text-xs">{p.inference_time_ms?.toFixed(2) ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className={compareMode && compareId && comparePreds ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : ''}>
+                {/* Primary */}
+                <PredTable
+                  predictions={preds.predictions}
+                  label={compareMode && compareId ? primaryLabel : undefined}
+                  accentColor={compareMode && compareId ? (METRIC_COLORS[selectedMetric] || 'var(--color-brand)') : undefined}
+                />
+                {/* Compare */}
+                {compareMode && compareId && comparePreds && comparePreds.predictions.length > 0 && (
+                  <PredTable
+                    predictions={comparePreds.predictions}
+                    label={compareLabel}
+                    accentColor="#06b6d4"
+                  />
+                )}
               </div>
             </div>
           )}
