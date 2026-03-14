@@ -134,12 +134,27 @@ make dashboard-build     # React + FastAPI dashboard
 ## GCN Model Commands
 
 ```bash
-make gcn-train           # Train new model
-make gcn-evaluate        # Evaluate model
-make gcn-deploy VERSION=v2.0.0   # Deploy version (updates current symlink)
+make gcn-train                              # Train new model (uses training_v3.yaml)
+make gcn-train OUTPUT_DIR=twin/registry/gcn/v3.0.0   # Train v3 with explicit output dir
+make gcn-evaluate                           # Evaluate model
+make gcn-deploy VERSION=v3.0.0             # Deploy version (updates current symlink)
+make gcn-trainer-build                      # Build CUDA-capable trainer image
 ```
 
-Active model: `twin/registry/gcn/current` → `v2.0.0`
+Active model: `twin/registry/gcn/current` → `v3.0.0` (F1=0.9978, multi-AP nap1-4, seg=32/64/128/256)
+
+### v3.0.0 Data Collection Commands
+
+```bash
+# Collect all training data in parallel (nap1-4, 4 seeds, 3 scenarios = 48 runs)
+make gcn-collect-data NCPU=8
+
+# Collect with explicit sim time
+make gcn-collect-data NCPU=8 SIM_TIME=80
+
+# Run individual multi-AP scenario
+make run-mlo-exp EXP_ID=... SCENARIO=normal NAP=2 NSTA=4 SEED=42 SIM_TIME=80
+```
 
 ---
 

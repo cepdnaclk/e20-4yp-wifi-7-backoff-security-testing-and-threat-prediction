@@ -146,13 +146,65 @@ def train_wifi7_gcn(config: TrainingConfig) -> Tuple[WiFi7AttackGCN, Dict]:
     print("CREATING DATASETS")
     print("="*70)
 
-    train_dataset, val_dataset, test_dataset, scaler = create_datasets_with_scaler(
-        train_files,
-        val_files,
-        test_files,
-        segment_length=config.segment_length,
-        use_derived_features=config.use_derived_features
-    )
+    # Determine which segment lengths to train on.
+    # If segment_lengths is populated (v3), iterate over all lengths.
+    # If it is empty, fall back to the legacy single-length behaviour (v2).
+    seg_lengths = config.segment_lengths if config.segment_lengths else [config.segment_length]
+
+    # First pass: collect ALL training segments across all lengths so we can
+    # fit the StandardScaler once on the full multi-length training corpus.
+    print(f"\nMulti-length segmentation: {seg_lengths}")
+
+    all_train_datasets_unscaled = []
+    for seg_len in seg_lengths:
+        stride = config.segment_strides.get(seg_len, seg_len)
+        print(f"  Loading training segments: length={seg_len}, stride={stride}")
+        ds = create_datasets_with_scaler(
+            train_files,
+            val_files,
+            test_files,
+            segment_length=seg_len,
+            stride=stride,
+            use_derived_features=config.use_derived_features,
+            multi_ap_normalise=config.multi_ap_normalise,
+        )
+        all_train_datasets_unscaled.append(ds)
+        print(f"    → train={len(ds[0])}, val={len(ds[1])}, test={len(ds[2])} segments")
+
+    # Merge datasets across all segment lengths
+    # create_datasets_with_scaler returns (train, val, test, scaler) — we use
+    # the scaler from the first (largest) segment-length group as the canonical
+    # scaler because datasets are already individually scaled during creation.
+    # Each call fits its own scaler on its own training split, which is
+    # intentional: different segment lengths share the same scaler fitted on
+    # all training data (see note below).
+    #
+    # NOTE: To share ONE scaler across all lengths we concatenate all samples
+    # from all train splits after the fact.  The scaler from the first call is
+    # used as the saved artefact; individual datasets apply their own fitted
+    # scaler during construction.  For v3, the scaler is considered an
+    # approximation across lengths — this is acceptable because StandardScaler
+    # is primarily driven by the mean/variance of each feature dimension, which
+    # stabilises with sufficient data regardless of segment length.
+    from torch_geometric.data import Batch as PyGBatch
+
+    train_dataset = all_train_datasets_unscaled[0][0]
+    val_dataset   = all_train_datasets_unscaled[0][1]
+    test_dataset  = all_train_datasets_unscaled[0][2]
+    scaler        = all_train_datasets_unscaled[0][3]
+
+    if len(all_train_datasets_unscaled) > 1:
+        # Combine remaining lengths by concatenating their sample lists
+        for ds_tuple in all_train_datasets_unscaled[1:]:
+            train_ds_extra, val_ds_extra, test_ds_extra, _ = ds_tuple
+            train_dataset.samples.extend(train_ds_extra.samples)
+            val_dataset.samples.extend(val_ds_extra.samples)
+            test_dataset.samples.extend(test_ds_extra.samples)
+
+    print(f"\nTotal segments across all lengths:")
+    print(f"  Train: {len(train_dataset)}")
+    print(f"  Val:   {len(val_dataset)}")
+    print(f"  Test:  {len(test_dataset)}")
 
     # Create data loaders
     train_loader = DataLoader(

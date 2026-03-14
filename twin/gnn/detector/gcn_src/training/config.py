@@ -7,7 +7,7 @@ hyperparameters and settings for training the GCN model.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -21,18 +21,34 @@ class TrainingConfig:
     """
 
     # ========== Model Architecture ==========
-    in_channels: int = 13  # 13 base features (NO bias!) or 16 with derived
+    in_channels: int = 17  # 16 features (13 base + 3 derived) + 1 seg-len feature
     hidden_channels: int = 64  # Hidden dimension
     num_layers: int = 2  # Number of GCN layers
     dropout: float = 0.3  # Dropout rate
     pooling: str = 'mean'  # 'mean', 'max', or 'concat'
 
     # ========== Data Processing ==========
-    segment_length: int = 256  # Windows per segment (L)
-    stride: int = 256  # Segmentation stride (None = non-overlapping)
+    segment_length: int = 256  # Windows per segment (L) — used when segment_lengths is empty
+    stride: int = 256  # Segmentation stride (None = non-overlapping) — used when segment_strides is empty
     use_derived_features: bool = True  # Add ratio features
     test_size: float = 0.15  # Test set fraction
     val_size: float = 0.15  # Validation set fraction
+
+    # ========== Multi-length Training ==========
+    # List of segment lengths to train on simultaneously.
+    # Empty list (or [256]) with matching strides reproduces v2 behaviour.
+    segment_lengths: List[int] = field(
+        default_factory=lambda: [32, 64, 128, 256]
+    )
+    # Stride per segment length. None / missing key → non-overlapping (stride = length).
+    segment_strides: Dict[int, int] = field(
+        default_factory=lambda: {32: 32, 64: 64, 128: 128, 256: 64}
+    )
+
+    # ========== Multi-AP Normalisation ==========
+    # Apply per-AP / per-STA normalisation before StandardScaler.
+    # Falls back gracefully for v2 data that lacks num_ap/num_sta fields.
+    multi_ap_normalise: bool = True
 
     # ========== Training Hyperparameters ==========
     batch_size: int = 32  # Batch size
@@ -66,11 +82,12 @@ class TrainingConfig:
         if not isinstance(self.log_dir, Path):
             self.log_dir = Path(self.log_dir)
 
-        # Update in_channels based on use_derived_features
+        # Update in_channels based on use_derived_features.
+        # The segment-length conditioning feature adds +1 to every variant.
         if self.use_derived_features:
-            self.in_channels = 16  # 13 base + 3 derived
+            self.in_channels = 17  # 13 base + 3 derived + 1 seg-len feature
         else:
-            self.in_channels = 13  # 13 base only
+            self.in_channels = 14  # 13 base + 1 seg-len feature
 
     def to_dict(self) -> dict:
         """Convert config to dictionary."""
@@ -88,6 +105,13 @@ class TrainingConfig:
             'use_derived_features': self.use_derived_features,
             'test_size': self.test_size,
             'val_size': self.val_size,
+
+            # Multi-length training
+            'segment_lengths': self.segment_lengths,
+            'segment_strides': self.segment_strides,
+
+            # Multi-AP normalisation
+            'multi_ap_normalise': self.multi_ap_normalise,
 
             # Training
             'batch_size': self.batch_size,
@@ -132,6 +156,9 @@ class TrainingConfig:
             f"layers={self.num_layers}, dropout={self.dropout}\n"
             f"  Data: L={self.segment_length}, stride={self.stride}, "
             f"derived={self.use_derived_features}\n"
+            f"  Multi-length: lengths={self.segment_lengths}, "
+            f"strides={self.segment_strides}\n"
+            f"  Multi-AP normalise: {self.multi_ap_normalise}\n"
             f"  Training: batch={self.batch_size}, lr={self.learning_rate}, "
             f"epochs={self.max_epochs}, patience={self.patience}\n"
             f"  Paths: data={self.data_root}, ckpt={self.checkpoint_dir}\n"

@@ -1,0 +1,45 @@
+# GCN v3 Training Configuration
+# Multi-AP (1-6 APs) + Multi-segment-length (32/64/128/256 windows)
+# Train with: make gcn-train CONFIG=twin/gnn/trainer/training_v3.yaml OUTPUT_DIR=twin/registry/gcn/v3.0.0
+
+version: "3.0.0"
+
+# Model architecture
+in_channels: 17        # 16 features + 1 segment-length conditioning feature
+hidden_channels: 64
+num_layers: 2
+dropout: 0.3
+pooling: mean
+
+# Multi-length training (Option A)
+segment_lengths: [32, 64, 128, 256]
+segment_strides:
+  32: 32
+  64: 64
+  128: 128
+  256: 64    # sliding window for 256 to compensate for short 80s runs
+
+# Multi-AP normalisation
+multi_ap_normalise: true
+use_derived_features: true
+use_class_weights: true
+
+# Training hyperparameters
+batch_size: 32
+learning_rate: 0.001
+weight_decay: 0.0001
+max_epochs: 200
+patience: 20
+random_seed: 42
+
+# Data split
+test_size: 0.15
+val_size: 0.15
+
+# I/O paths (inside Docker container)
+data_root: /data
+checkpoint_dir: checkpoints_v3.0.0
+log_dir: logs_v3.0.0
+
+# Hardware (falls back to cpu if cuda unavailable)
+device: cuda

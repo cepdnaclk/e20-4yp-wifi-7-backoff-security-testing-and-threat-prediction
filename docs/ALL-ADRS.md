@@ -35,6 +35,11 @@ This document contains all architectural decisions made during the implementatio
 - [ADR-WP7.5-02](#adr-wp75-02-topic-pre-creation-and-health-checks): Topic pre-creation and health checks
 - [ADR-WP7.5-03](#adr-wp75-03-at-least-once-delivery-semantics): At-least-once delivery semantics
 
+### WP12 (GCN v3 Multi-AP Training)
+- [ADR-WP12-01](#adr-wp12-01-sim_time80s-for-v3-training-data): SIM_TIME=80s for v3 training data
+- [ADR-WP12-02](#adr-wp12-02-nap1-4-only-for-v300-training): nap1-4 only for v3.0.0 training
+- [ADR-WP12-03](#adr-wp12-03-17th-feature-for-segment-length-conditioning): 17th feature for segment-length conditioning
+
 ---
 
 ## ADR-0001: Use GitHub SSH (ed25519) for Repo Access
@@ -821,3 +826,150 @@ DO UPDATE SET value = EXCLUDED.value;  -- Idempotent upsert
 - **No data loss:** Guaranteed delivery of all messages
 - **Simple to reason about:** Binary success/failure (all or nothing)
 - **Performance acceptable:** 260-message replay takes <1 second
+
+---
+
+## ADR-WP12-01: SIM_TIME=80s for v3 Training Data
+
+### Status
+Accepted
+
+### Date
+2026-03-13
+
+### Context
+WP12 required collecting training data across multiple AP counts (nap1-6). At 300s simulation time, a nap4 run takes over 2.5 hours. Running 72 simulations (nap1-6, 4 seeds, 3 scenarios) at 300s would require 7.5+ days of sequential compute, or over 22 hours even with 8 parallel cores.
+
+### Decision
+Use SIM_TIME=80s for all v3 training data collection.
+
+### Rationale
+- 80s produces ~800 windows per file (80s / 0.1s per window), which is sufficient for training
+- Sliding window segmentation with stride=64 gives 9 segments per file at 256-window length — 3x more than non-overlapping, compensating for the shorter run
+- At SIM_TIME=80s, nap4 runs take ~40 minutes; nap1 runs take ~4 minutes
+- Total wall-clock time with 8 cores: ~36-38 minutes for 48 files (nap1-4)
+- Sufficient segment diversity: 48 files × (9+6+12+25) segments = ~2,496 training segments
+
+### Implementation
+All v3 data collected at SIM_TIME=80s, stored in `twin/gnn/training_data/v3/`. The Makefile default is `SIM_TIME=80` for `gcn-collect-data`.
+
+### Consequences
+
+#### Positive
+- Practical wall-clock time for data collection
+- Sufficient window budget for all four segment lengths
+- Allows iteration on training without waiting days for data
+
+#### Negative
+- 80s captures fewer unique traffic patterns than 300s
+- Overlapping 256-window segments share some windows (not fully independent)
+
+#### Mitigations
+- Overlapping segments from the same file are kept in the same train/val/test split partition (split by file, not by segment) to prevent leakage
+- 4 different seeds per config provides some diversity
+- v3.1.0 can add nap5/6 with SIM_TIME=30s for even faster collection
+
+### Related
+- WP12: GCN v3 multi-AP training
+- ADR-WP12-02: nap1-4 only for v3.0.0
+
+---
+
+## ADR-WP12-02: nap1-4 Only for v3.0.0 Training
+
+### Status
+Accepted
+
+### Date
+2026-03-13
+
+### Context
+The original WP12 plan targeted nap1-6 (1 to 6 access points) to cover a wide range of multi-AP topologies. During data collection, nap5 runs were measured at approximately 2.5 hours per simulation at SIM_TIME=80s. Collecting nap5/6 data (12 configs x 4 seeds x 3 scenarios = 144 runs) would require 15+ days of sequential compute, or approximately 45 hours with 8 parallel cores — not practical for a single session.
+
+### Decision
+Train v3.0.0 on nap1-4 only. Defer nap5/6 to v3.1.0.
+
+### Rationale
+- nap1-4 provides meaningful AP-count diversity (1, 2, 3, 4 access points)
+- nap4 is already a demanding topology (32 stations, significant contention)
+- v3.0.0 with nap1-4 significantly extends v2 (nap1 only) to cover the most common deployment sizes
+- Adding nap5/6 later (v3.1.0) is straightforward: just add data and retrain
+- nap5/6 strategy for v3.1.0: use SIM_TIME=30s to reduce per-run time from ~2.5h to ~45min; NCPU=6 parallelisation gives ~9h wall-clock for 12 runs
+
+### Implementation
+`collect_v3_data.sh` and the `NAP_NSTA` array cover nap1-4 for v3.0.0 collection. The nap5-6 entries are commented out with a note pointing to v3.1.0.
+
+### Consequences
+
+#### Positive
+- v3.0.0 deliverable in one session rather than weeks
+- Model covers the most common enterprise Wi-Fi AP counts
+- Strong generalisation across nap1-4 verified by test results (F1=0.9978)
+
+#### Negative
+- Model may underperform on nap5/6 topologies (outside training distribution)
+- Dashboard will show no warning when user selects nAp=5 or nAp=6 with v3.0.0
+
+#### Mitigations
+- Dashboard shows "trained on nap1-4" note for nAp selections above 4 (planned for v3.1.0 UI update)
+- v3.1.0 adds nap5/6 with SIM_TIME=30s strategy
+
+### Related
+- WP12: GCN v3 multi-AP training
+- ADR-WP12-01: SIM_TIME=80s for training data
+
+---
+
+## ADR-WP12-03: 17th Feature for Segment-Length Conditioning
+
+### Status
+Accepted
+
+### Date
+2026-03-13
+
+### Context
+GCN v3 needs to support multiple segment window lengths (32, 64, 128, 256) within a single model. The GCN architecture (global_mean_pool) is topology-agnostic — it can process graphs of any node count — but the StandardScaler fit on 256-window segments produces out-of-distribution z-scores for shorter segments because delta features accumulate over fewer windows (smaller absolute values).
+
+Options considered:
+1. Train four separate models (one per segment length): simple but quadruples inference infrastructure
+2. Train a unified model on all segment lengths but add a conditioning feature: single model, minimal architectural change
+3. Encode segment length in Kafka message headers and use a routing layer: complex, requires multi-head architecture
+
+### Decision
+Append `log2(segment_length) / 8.0` as a constant 17th feature to every node's feature vector. The GCN's input dimension changes from 16 to 17. All other architecture choices (2 GCN layers, hidden=64, global mean pool, MLP head) are unchanged.
+
+### Rationale
+- A single 17th scalar signal is sufficient for the GCN to learn scale-dependent patterns
+- `log2(L)/8.0` maps [32,64,128,256] to [0.625, 0.75, 0.875, 1.0] — evenly spaced in log space
+- The StandardScaler learns the correct normalisation for this feature from the training distribution
+- Single model simplifies deployment: no routing, no separate inference endpoints
+- Minimal impact on inference latency (one extra scalar per node)
+
+### Implementation
+`preprocessing.py` appends the feature during training: `np.hstack([features, seg_len_feature])`.
+
+`feature_processor.py` appends the same feature at inference time after reading `segment_length` from the windowed feature message. The v2 backward compatibility path is triggered when `scaler.n_features_in_ == 16` (v2 scaler) — in that case the 17th feature and multi-AP normalisation are skipped.
+
+`config.py` sets `in_channels=17`. v2 models remain in the registry with their original 16-channel config and are not affected.
+
+### Consequences
+
+#### Positive
+- Single model handles all four window sizes
+- Simple to reason about: one constant per graph
+- v2 backward compatibility preserved in `feature_processor.py`
+- No change to GCN graph structure or edge construction
+
+#### Negative
+- v2 and v3 model configs are incompatible (`in_channels` differs)
+- The 17th feature is constant across all nodes in a segment — a graph-level signal masquerading as a node feature
+
+#### Mitigations
+- Registry version check ensures the correct `in_channels` is used for each model
+- Scaler dimension check (`n_features_in_`) provides automatic v2/v3 routing at inference time
+
+### Related
+- WP12: GCN v3 multi-AP training
+- ADR-WP12-01: SIM_TIME=80s choice
+- ADR-WP12-02: nap1-4 scope

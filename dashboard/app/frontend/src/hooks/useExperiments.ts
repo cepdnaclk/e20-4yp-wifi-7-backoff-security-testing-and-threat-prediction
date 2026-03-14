@@ -1,9 +1,11 @@
 import { useApi } from './useApi'
 import type { ExperimentListResponse, ExperimentSummary, MetricSeries, MetricStat } from '../types/experiments'
 
-export function useExperiments(limit = 50, prefix?: string) {
+export function useExperiments(limit = 50, prefix?: string, dateFrom?: string, dateTo?: string) {
   const params = new URLSearchParams({ limit: String(limit) })
   if (prefix) params.set('prefix', prefix)
+  if (dateFrom) params.set('date_from', dateFrom)
+  if (dateTo) params.set('date_to', dateTo)
   return useApi<ExperimentListResponse>(`/api/experiments?${params}`, 10_000)
 }
 

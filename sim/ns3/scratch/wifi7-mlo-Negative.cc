@@ -809,8 +809,9 @@
 #include "ns3/mobility-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/applications-module.h"
-#include "ns3/flow-monitor-module.h" 
+#include "ns3/flow-monitor-module.h"
 #include "ns3/netanim-module.h"
+#include "ns3/rng-seed-manager.h"
 
 using namespace ns3;
 
@@ -844,7 +845,9 @@ struct Tracer {
     std::ofstream* out;
     bool* first;
     double bias;
-    
+    uint32_t nAp = 1;
+    uint32_t nSta = 2;
+
     std::map<uint32_t, NodeStats> stats;
     std::map<uint64_t, uint32_t> txCount; // Map Packet UID -> Transmit Count
     
@@ -1000,8 +1003,10 @@ struct Tracer {
 
         if (!(*first)) *out << ",\n";
         *first = false;
-        *out << "{\"window\":" << g_window++ 
-             << ",\"bias\":" << bias 
+        *out << "{\"window\":" << g_window++
+             << ",\"bias\":" << bias
+             << ",\"num_ap\":" << (int)nAp
+             << ",\"num_sta\":" << (int)(nAp * nSta)
              << ",\"net_throughput_mbps\":" << mbps
              << ",\"net_avg_delay_ms\":" << winDelay * 1000.0
              << ",\"net_avg_jitter_ms\":" << winJitter * 1000.0
@@ -1015,7 +1020,7 @@ struct Tracer {
              << ",\"phy_drop_count\":" << totPhyDrop
              << ",\"avg_backoff_slots\":" << avgBackoff
              << ",\"channel_busy_ratio\":" << busyRatio
-             << "}"; 
+             << "}";
     }
 };
 
@@ -1052,6 +1057,7 @@ void ApplyAttack(NetDeviceContainer& devs, int bias, uint32_t minCw) {
 
 int main(int argc, char* argv[]) {
     uint32_t nSta = 2, nAp = 1, minCw = 15;
+    uint32_t seed = 42;
     double bias = 0, simTime = 30.0;
 
     std::string jsonPath = "default.json";
@@ -1059,17 +1065,24 @@ int main(int argc, char* argv[]) {
 
 
     CommandLine cmd(__FILE__);
+    cmd.AddValue("nAp",  "Number of access points",             nAp);
+    cmd.AddValue("nSta", "Number of stations per access point", nSta);
+    cmd.AddValue("seed", "Random seed for RngSeedManager",      seed);
     cmd.AddValue("bias", "Backoff bias", bias);
     cmd.AddValue("time", "Simulation time", simTime);
-    cmd.AddValue ("jsonPath", "Path for JSON output", jsonPath);
-    cmd.AddValue ("xmlPath", "Path for XML output", xmlPath);
+    cmd.AddValue("jsonPath", "Path for JSON output", jsonPath);
+    cmd.AddValue("xmlPath",  "Path for XML output",  xmlPath);
     cmd.Parse(argc, argv);
 
+    RngSeedManager::SetSeed(seed);
+    RngSeedManager::SetRun(1);
 
     std::ofstream json(jsonPath.c_str());  // Use CLI arg for output path
     json << "[\n";
     bool first = true;
     Tracer tracer{&json, &first, bias};
+    tracer.nAp  = nAp;
+    tracer.nSta = nSta;
 
     NodeContainer sta, ap;
     sta.Create(nSta); ap.Create(nAp);

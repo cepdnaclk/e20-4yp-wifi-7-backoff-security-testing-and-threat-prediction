@@ -191,7 +191,8 @@ def segment_windows(
     if strategy == 'non_overlapping':
         stride = segment_length
     elif stride is None:
-        stride = segment_length // 2  # 50% overlap by default
+        # When strategy is 'sliding' but no explicit stride given, use 50% overlap
+        stride = segment_length // 2
 
     segments = []
     total_windows = len(windows)
@@ -244,28 +245,49 @@ DERIVED_FEATURE_KEYS = [
     "throughput_per_flow"
 ]
 
-# Total: 13 base features, 16 with derived features
+# Total: 13 base features, 16 with derived features, 17 with seg-len feature
 F_DIM_BASE = len(BASE_FEATURE_KEYS)  # 13
 F_DIM_DERIVED = len(BASE_FEATURE_KEYS) + len(DERIVED_FEATURE_KEYS)  # 16
+F_DIM_FULL = F_DIM_DERIVED + 1  # 17 (with segment-length conditioning feature)
+
+# Per-STA MAC/PHY delta keys used for multi-AP normalisation
+_PER_STA_KEYS = [
+    'mac_tx_delta', 'mac_rx_delta', 'mac_ack_delta',
+    'mac_retrans_delta', 'mac_drop_delta', 'phy_drop_delta'
+]
 
 
 def extract_features(
     windows: List[Dict],
-    use_derived: bool = True
+    use_derived: bool = True,
+    segment_length: int = 256,
+    multi_ap_normalise: bool = True
 ) -> np.ndarray:
     """
     Extract feature matrix from windows.
 
     CRITICAL: Ensures 'bias' is NEVER included in features.
 
+    Applies per-AP normalisation for absolute metrics so that models trained
+    on N-AP topologies generalise across different AP counts.  Falls back to
+    no normalisation when ``num_ap``/``num_sta`` are absent (v2 data).
+
+    Appends a segment-length conditioning column (log2(L) / 8.0) as the final
+    feature so the model can adapt its decision boundary to the temporal
+    resolution of the input.
+
     Args:
         windows: List of window dictionaries (with delta fields)
         use_derived: Whether to include derived features
+        segment_length: Length of the segment (number of windows); used for
+            the conditioning feature.  Defaults to 256.
+        multi_ap_normalise: Whether to apply per-AP/per-STA normalisation.
+            Set to False to reproduce v2 behaviour exactly.
 
     Returns:
         Feature matrix of shape [num_windows, num_features]
-        - If use_derived=False: [num_windows, 13]
-        - If use_derived=True: [num_windows, 16]
+        - If use_derived=False: [num_windows, 14]  (13 base + 1 seg-len)
+        - If use_derived=True:  [num_windows, 17]  (16 base+derived + 1 seg-len)
     """
     feature_keys = BASE_FEATURE_KEYS.copy()
     if use_derived:
@@ -283,7 +305,40 @@ def extract_features(
         ]
         features.append(feature_vector)
 
-    return np.array(features, dtype=np.float32)
+    features = np.array(features, dtype=np.float32)
+
+    # ------------------------------------------------------------------
+    # Per-AP / per-STA normalisation (new for v3)
+    # Falls back gracefully when num_ap/num_sta are absent (v2 data).
+    # ------------------------------------------------------------------
+    if multi_ap_normalise and len(windows) > 0:
+        # Read topology fields from the first window; default to 1/2 so that
+        # v2 data (which lacks these fields) is unchanged.
+        num_ap  = float(windows[0].get('num_ap',  1) or 1)
+        num_sta = float(windows[0].get('num_sta', 2) or 2)
+
+        # Only apply when the topology has more than the legacy defaults so
+        # that single-AP v2 data is passed through unmodified.
+        if num_ap != 1 or num_sta != 2:
+            # Throughput scales with number of APs
+            throughput_idx = BASE_FEATURE_KEYS.index('net_throughput_mbps')
+            features[:, throughput_idx] /= num_ap
+
+            # MAC/PHY delta counters scale with total number of stations
+            for key in _PER_STA_KEYS:
+                if key in BASE_FEATURE_KEYS:
+                    idx = BASE_FEATURE_KEYS.index(key)
+                    features[:, idx] /= num_sta
+
+    # ------------------------------------------------------------------
+    # Segment-length conditioning feature (17th feature when use_derived=True)
+    # Constant column: log2(L) / 8.0  — maps [1, 256] → [0, 1]
+    # ------------------------------------------------------------------
+    seg_len_val = np.log2(float(segment_length)) / 8.0
+    seg_len_col = np.full((len(features), 1), seg_len_val, dtype=np.float32)
+    features = np.hstack([features, seg_len_col])
+
+    return features
 
 
 def get_label_from_windows(windows: List[Dict]) -> int:
@@ -355,10 +410,12 @@ if __name__ == "__main__":
     print("=" * 50)
     print(f"Base features: {F_DIM_BASE}")
     print(f"With derived: {F_DIM_DERIVED}")
+    print(f"With seg-len feature: {F_DIM_FULL}")
     print("\nFeature keys (base):")
     for i, key in enumerate(BASE_FEATURE_KEYS, 1):
         print(f"  {i:2d}. {key}")
     print("\nDerived features:")
     for i, key in enumerate(DERIVED_FEATURE_KEYS, 1):
         print(f"  {i:2d}. {key}")
+    print(f"  {F_DIM_FULL:2d}. seg_len_feature  [log2(L) / 8.0]")
     print("\n✓ Module loaded successfully")

@@ -36,8 +36,11 @@ services:
     volumes:
       # Mount GCN model registry read-only so the dashboard can list versions
       - ./twin/registry/gcn:/registry:ro
-      # Mount ns-3 artifacts so backend can read live run status markers
-      - ./sim/ns3/artifacts:/artifacts:ro
+      # Mount ns-3 artifacts read-write — launcher writes status to .pipeline_active.json
+      - ./sim/ns3/artifacts:/artifacts
+      # Mount repo root so dashboard can launch NS-3 experiments via make
+      # Requires make and ns3 available on host; see WP12 for host-runner alternative
+      - .:/repo:ro
     logging:
       driver: json-file
       options:

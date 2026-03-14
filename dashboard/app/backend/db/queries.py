@@ -6,7 +6,14 @@ from ..runtime.status import read_active_runtime_status
 
 # ── Experiments ──────────────────────────────────────────────────────────────
 
-async def get_experiments(pool, limit=50, offset=0, prefix: Optional[str] = None):
+async def get_experiments(
+    pool,
+    limit=50,
+    offset=0,
+    prefix: Optional[str] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+):
     """Returns list of experiment summaries joining metrics and gcn_predictions."""
     sql = """
     WITH m AS (
@@ -40,22 +47,51 @@ async def get_experiments(pool, limit=50, offset=0, prefix: Optional[str] = None
     FROM m
     LEFT JOIN p ON m.experiment_id = p.experiment_id
     """
-    args = []
+    args: list = []
+    conditions = []
     if prefix:
-        sql += " WHERE m.experiment_id LIKE $1"
         args.append(prefix + "%")
+        conditions.append(f"m.experiment_id LIKE ${len(args)}")
+    if date_from:
+        args.append(date_from)
+        conditions.append(f"m.last_ts >= ${len(args)}")
+    if date_to:
+        args.append(date_to)
+        conditions.append(f"m.first_ts <= ${len(args)}")
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
     sql += " ORDER BY m.last_ts DESC NULLS LAST"
     sql += f" LIMIT {limit} OFFSET {offset}"
     async with pool.acquire() as conn:
         return await conn.fetch(sql, *args)
 
 
-async def count_experiments(pool, prefix: Optional[str] = None):
-    sql = "SELECT COUNT(DISTINCT experiment_id) FROM metrics"
-    args = []
+async def count_experiments(
+    pool,
+    prefix: Optional[str] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+):
+    sql = """
+    WITH m AS (
+        SELECT experiment_id, MIN(ts) AS first_ts, MAX(ts) AS last_ts
+        FROM metrics GROUP BY experiment_id
+    )
+    SELECT COUNT(*) FROM m
+    """
+    args: list = []
+    conditions = []
     if prefix:
-        sql += " WHERE experiment_id LIKE $1"
         args.append(prefix + "%")
+        conditions.append(f"experiment_id LIKE ${len(args)}")
+    if date_from:
+        args.append(date_from)
+        conditions.append(f"last_ts >= ${len(args)}")
+    if date_to:
+        args.append(date_to)
+        conditions.append(f"first_ts <= ${len(args)}")
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
     async with pool.acquire() as conn:
         return await conn.fetchval(sql, *args)
 

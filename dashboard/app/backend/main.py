@@ -7,6 +7,7 @@ import pathlib
 
 from .db.connection import init_pool, close_pool
 from .api import experiments, models, analysis, pipeline
+from .api import run as run_router
 from .ws.pipeline import router as ws_router
 
 DB_CONFIG = {
@@ -45,6 +46,7 @@ app.include_router(experiments.router, prefix="/api")
 app.include_router(models.router, prefix="/api")
 app.include_router(analysis.router, prefix="/api")
 app.include_router(pipeline.router, prefix="/api")
+app.include_router(run_router.router, prefix="/api")
 app.include_router(ws_router)
 
 

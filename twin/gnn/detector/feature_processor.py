@@ -113,6 +113,67 @@ class FeatureProcessor:
 
         return processed_windows
 
+    def build_feature_matrix(self, windows: List[Dict]) -> np.ndarray:
+        """
+        Build a scaled numpy feature matrix from a list of window dicts.
+
+        Applies derived features, multi-AP normalisation, StandardScaler,
+        and (when the scaler has 17 dimensions) appends a segment-length
+        conditioning feature so that inference is compatible with v3 models.
+
+        Args:
+            windows: List of window dicts (already windowed)
+
+        Returns:
+            Scaled feature array of shape [len(windows), num_features]
+        """
+        # Add derived features
+        windows = self.add_derived_features(windows)
+
+        # Build raw feature matrix
+        features = np.array(
+            [[float(w.get(k, 0.0)) for k in self.feature_keys] for w in windows],
+            dtype=np.float32,
+        )
+
+        # Multi-AP normalisation — divide absolute metrics by topology count
+        # Falls back gracefully when num_ap/num_sta absent (v2 data)
+        num_ap  = float(windows[0].get('num_ap',  1) or 1) if windows else 1.0
+        num_sta = float(windows[0].get('num_sta', 2) or 2) if windows else 2.0
+
+        if num_ap != 1.0 or num_sta != 2.0:
+            # Throughput scales with nAp
+            try:
+                tp_idx = self.feature_keys.index('net_throughput_mbps')
+                features[:, tp_idx] /= num_ap
+            except (ValueError, AttributeError):
+                pass
+            # MAC/PHY delta counters scale with nSta
+            per_sta = ['mac_tx_delta', 'mac_rx_delta', 'mac_ack_delta',
+                       'mac_retrans_delta', 'mac_drop_delta', 'phy_drop_delta']
+            for key in per_sta:
+                try:
+                    idx = self.feature_keys.index(key)
+                    features[:, idx] /= num_sta
+                except (ValueError, AttributeError):
+                    pass
+
+        # Apply StandardScaler: (x - mean) / scale
+        features = (features - self.scaler_mean) / self.scaler_scale
+
+        # Append segment-length conditioning feature: log2(L) / 8.0
+        # This must match what training preprocessing.py adds
+        seg_len = float(len(windows))
+        seg_len_val = np.log2(max(seg_len, 1.0)) / 8.0
+
+        # Only add seg-len feature if model expects 17 channels (v3)
+        # Scaler mean has length 17 for v3, 16 for v2
+        if hasattr(self, 'scaler_mean') and len(self.scaler_mean) == 17:
+            seg_len_col = np.full((features.shape[0], 1), seg_len_val, dtype=np.float32)
+            features = np.hstack([features, seg_len_col])
+
+        return features
+
     def process_segment(self, segment: Dict) -> Dict:
         """
         Process segment: add derived features and prepare for scaling.
