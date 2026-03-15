@@ -2,8 +2,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 import os
 import pathlib
+import logging
 
 from .db.connection import init_pool, close_pool
 from .api import experiments, models, analysis, pipeline
@@ -21,7 +23,6 @@ DB_CONFIG = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import logging
     try:
         app.state.pool = await init_pool(DB_CONFIG)
         logging.info("DB pool connected: %s:%s/%s", DB_CONFIG["host"], DB_CONFIG["port"], DB_CONFIG["database"])
@@ -33,8 +34,21 @@ async def lifespan(app: FastAPI):
         await close_pool(app.state.pool)
 
 
+class LazyPoolMiddleware(BaseHTTPMiddleware):
+    """If the DB pool failed to init at startup, retry on each API request."""
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path.startswith("/api") and getattr(request.app.state, "pool", None) is None:
+            try:
+                request.app.state.pool = await init_pool(DB_CONFIG)
+                logging.info("DB pool reconnected on request")
+            except Exception as e:
+                logging.warning("DB pool retry failed: %s", e)
+        return await call_next(request)
+
+
 app = FastAPI(title="NDT Dashboard API", version="1.0.0", lifespan=lifespan)
 
+app.add_middleware(LazyPoolMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
