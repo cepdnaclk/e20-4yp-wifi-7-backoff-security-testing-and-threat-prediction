@@ -23,7 +23,7 @@ This document provides complete context about the current state of the project. 
 | WP10 | ✅ Complete | Custom web dashboard (React 18 + FastAPI, port 8888) |
 | WP11 | ✅ Complete | Pipeline & DB writer bug fixes (Attack Analysis tab) |
 | WP12 | ✅ Complete | GCN v3 multi-AP + multi-length training + dashboard launcher (v3.0.0: F1=0.9978, AUC=1.0000) |
-| WP13 | 🔲 TODO | Closed-loop policy actuation (detector → ZSM/SDN response: link steering, channel switching, deauth) |
+| WP13 | 🚧 In Progress | GCN v4 dynamic generalization — data + model code complete; training pending |
 
 ---
 
@@ -140,6 +140,29 @@ make gcn-collect-data NCPU=8              # Run all 72 simulations in parallel (
 make gcn-collect-data NCPU=8 SIM_TIME=80  # Explicit 80s sim time
 # Or directly:
 NCPU=8 bash sim/ns3/scenario/collect_v3_data.sh
+```
+
+### GCN v4 Data Collection (WP13)
+```bash
+# Static data (uses pre-partitioned train/val/test seed pools)
+NCPU=8 bash sim/ns3/scenario/collect_v4_static_data.sh
+
+# Dynamic data (30 phase patterns A/B/C/D/E plus T-patterns for test-only)
+NCPU=8 bash sim/ns3/scenario/collect_v4_dynamic_data.sh
+
+# Synthetic stitching (create dynamic training files from existing static sources)
+python twin/gnn/stitch_dynamic.py --split train
+python twin/gnn/stitch_dynamic.py --split val
+python twin/gnn/stitch_dynamic.py --split test
+python twin/gnn/stitch_dynamic.py --summary   # Show dataset statistics
+```
+
+### GCN v4 Training (WP13 — pending)
+```bash
+make gcn-trainer-build                              # Rebuild Docker trainer image (includes v4 files)
+make gcn-train-v4 OUTPUT_DIR=twin/registry/gcn/v4.0.0
+make gcn-deploy VERSION=v4.0.0
+docker compose -f docker-compose.pipeline.yml restart gcn-detector
 ```
 
 ### Multi-AP Simulation (WP12)
@@ -362,11 +385,12 @@ ndt-wifi7-mlo-security/
 │       ├── current -> v3.0.0            # Active version symlink
 │       ├── v1.0.0/                      # Baseline model
 │       ├── v2.0.0/                      # Balanced single-AP model
-│       └── v3.0.0/                      # Multi-AP multi-length model (F1=0.9978)
-│           ├── best_model.pt
-│           ├── scaler.json              # 17-dim (16 features + seg-len)
-│           ├── config.yaml
-│           └── test_results.json
+│       ├── v3.0.0/                      # Multi-AP multi-length model (F1=0.9978)
+│       │   ├── best_model.pt
+│       │   ├── scaler.json              # 17-dim (16 features + seg-len)
+│       │   ├── config.yaml
+│       │   └── test_results.json
+│       └── v4.0.0/                      # [PENDING] Dynamic generalization model
 ├── dashboard/app/                       # Custom web dashboard (WP10)
 │   ├── Dockerfile                       # Multi-stage: Node 20 → Python 3.11
 │   ├── backend/                         # FastAPI + asyncpg
@@ -383,7 +407,15 @@ ndt-wifi7-mlo-security/
 ├── docker-compose.pipeline.yml          # Harmonizer + Windowizer + GCN
 ├── docker-compose.dashboard.yml         # Custom dashboard
 ├── run_scenarios.sh                     # Batch: normal + pos + neg attacks
-├── training_data/                       # GCN training data (gitignored)
+├── twin/gnn/training_data/
+│   ├── v3/                              # GCN v3.0.0 training data (gitignored)
+│   └── v4/                              # GCN v4.0.0 training data (gitignored)
+│       ├── train/Static/{Normal,Attack}/
+│       ├── train/Dynamic/               # Synthetic stitched phase-transition files
+│       ├── val/Static/{Normal,Attack}/
+│       ├── val/Dynamic/
+│       ├── test/Static/{Normal,Attack}/
+│       └── test/Dynamic/
 ├── docs/                                # All documentation
 └── Makefile
 ```
@@ -544,15 +576,95 @@ Key architectural changes vs v2:
 - Multi-segment-length training: [32, 64, 128, 256] simultaneously
 - Sliding window for 256: stride=64 → 9 segments per 80s run
 
-## Next Steps (WP13)
+## WP13: GCN v4 Dynamic Generalization (In Progress — 2026-03-15)
 
-**WP13: Closed-loop policy actuation** — detector predictions feed back into a ZSM/SDN controller to trigger real-time mitigations:
-- Link steering: redirect traffic away from attacked link
-- Channel switching: move to uncontested channel
-- Deauth: disconnect confirmed attacker stations
+### Overview
+
+WP13 trains GCN v4.0.0, which extends v3.0.0 to correctly classify segments in dynamic/transitioning attack scenarios. GCN v3 was trained exclusively on static files (uniform bias per run) and fails on phase-transition segments. v4 introduces dynamic training data with 30 multi-phase patterns.
+
+### What Was Completed
+
+#### 1. Problem Diagnosis
+GCN v3 fails on dynamic scenarios because it has never seen a segment containing a phase boundary. Transition segments contain mixed-bias windows that the v3 model classifies unreliably. Static pure segments are handled correctly; only transition segments fail.
+
+#### 2. Data Collection Infrastructure
+Two parallel NS-3 batch collection scripts created:
+
+`sim/ns3/scenario/collect_v4_static_data.sh`:
+- AP/STA pairs: nap1:nsta2, nap2:nsta4, nap3:nsta2, nap4:nsta2
+- Train seeds: 42,111,123,222,321,333,456,654,789,987 (10 seeds)
+- Val seeds: 444,777,888 (3 seeds, strictly disjoint from train)
+- Test seeds: 555,999,1234 (3 seeds, strictly disjoint from train and val)
+- Attack biases: train=[1000,2000,5000], val=[5000], test=[500,1000,2000,4000,5000]
+- Skip-if-exists logic for safe restarts
+- Output: `twin/gnn/training_data/v4/{train,val,test}/Static/{Normal,Attack}/`
+
+`sim/ns3/scenario/collect_v4_dynamic_data.sh`:
+- 30 phase patterns across groups A (2-phase), B (3-phase), C (4-phase), D (uneven timing), E (weak bias)
+- T-group (5-phase, test-only — never seen in training)
+- Parallel runner with configurable NCPU workers
+- Output: `twin/gnn/training_data/v4/{train,val,test}/Dynamic/`
+
+#### 3. Synthetic Dynamic Dataset
+`twin/gnn/stitch_dynamic.py` synthesizes dynamic training files by stitching together windows from existing static source files. Each phase takes 400 windows from the middle of an 800-window static source file (windows 200-600). Phase offsets [200,0,400] ensure no source-file overlap across phases. No-leakage guarantee: a static source file is only stitched within the same split it belongs to.
+
+CLI flags: `--split {train,val,test}`, `--dry-run`, `--overwrite`, `--summary`.
+
+#### 4. GCN v4 Model Code
+| File | Purpose |
+|------|---------|
+| `twin/gnn/detector/gcn_src/data/dataset_v4.py` | WiFi7AttackDatasetV4: per-segment dynamic labeling (30% threshold), load_v4_files for pre-partitioned folder structure |
+| `twin/gnn/detector/gcn_src/training/train_v4.py` | v4 training pipeline: hidden=128, 3 GCN layers, dropout=0.4 |
+| `twin/gnn/detector/run_training_v4.py` | Entry point |
+| `twin/gnn/trainer/training_v4.yaml` | v4 training config |
+| `twin/gnn/trainer/Dockerfile` | Updated to include v4 training files |
+
+#### 5. Actual Dataset State (2026-03-15)
+Files currently on disk in `twin/gnn/training_data/v4/`:
+
+| Split | Static Normal | Static Attack | Dynamic (synthetic) | Total |
+|-------|-------------|--------------|--------------------|----|
+| Train | 28 | 165 | 1,852 | 2,045 |
+| Val | 17 | 33 | 98 | 148 |
+| Test | 6 | 59 | 620 | 685 |
+
+### Key Architecture Decisions (v4)
+
+| Decision | Choice |
+|----------|--------|
+| Dynamic label strategy | Majority-vote with 30% threshold (attack if >30% of windows in segment are attack) |
+| Architecture width | hidden=128, 3 layers (vs v3: hidden=64, 2 layers) |
+| Segment strides | stride=length for 32/64/128 (non-overlapping); stride=64 for 256 (sliding) |
+| Seed isolation | Strictly disjoint train/val/test seed pools |
+| Test phase patterns | T-group (5-phase) only in test split — never in training |
+| Synthetic stitching | 400-window slices from static source middles; same seed only within same split |
+
+### What Remains (Next Session)
+
+```bash
+make gcn-trainer-build                              # Rebuild trainer Docker image
+make gcn-train-v4 OUTPUT_DIR=twin/registry/gcn/v4.0.0
+make gcn-deploy VERSION=v4.0.0
+docker compose -f docker-compose.pipeline.yml restart gcn-detector
+```
+
+After training:
+- Evaluate v4 vs v3 on static benchmark (5 tiers, expect F1 >= 0.995)
+- Evaluate on dynamic benchmark (neg->norm->pos, 4 window sizes)
+- Evaluate on held-out T-patterns (5-phase, never in training)
+- Compare v3 vs v4 in dashboard side-by-side compare mode
+
+### Related Documentation
+- `docs/WP13-GCN-V4-DYNAMIC-TRAINING-PLAN.md` — full planning doc with phase patterns, architecture, training config
+
+---
+
+## Next Steps (after WP13)
+
+WP13 original scope also included closed-loop policy actuation (detector predictions feeding back into a ZSM/SDN controller for link steering, channel switching, and deauth). This has been deferred pending v4 model training and evaluation.
 
 Related work deferred from WP12:
-- nap5/6 training data (v3.1.0): use `SIM_TIME=30s` to reduce per-run time from ~2.5h to ~45min
+- nap5/6 training data (v3.1.0 or v4.1.0): use `SIM_TIME=30s` to reduce per-run time from ~2.5h to ~45min
 - Playwright end-to-end test for Run Experiment dashboard section
 
 ---
@@ -569,6 +681,7 @@ Related work deferred from WP12:
 - `WP6-GRAFANA-DASHBOARDS.md` - WP6 details
 - `WP7-ONE-COMMAND-PIPELINE.md` - WP7 details
 - `WP12-GCN-V3-MULTI-AP-TRAINING-PLAN.md` - WP12 full plan and results
+- `WP13-GCN-V4-DYNAMIC-TRAINING-PLAN.md` - WP13 full plan, phase patterns, training config
 - `MODEL-EVALUATION-GUIDE.md` - Evaluation matrix guide and 2026-03-14 results
 - `EVALUATION-RESULTS-2026-03-14.md` - Full 54-experiment evaluation report
 - `.claude/docs/WorkProcess/HOWTORUN.md` - WP7.5 workflow guide

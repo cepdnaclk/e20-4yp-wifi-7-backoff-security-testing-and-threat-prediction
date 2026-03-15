@@ -40,6 +40,15 @@ This document contains all architectural decisions made during the implementatio
 - [ADR-WP12-02](#adr-wp12-02-nap1-4-only-for-v300-training): nap1-4 only for v3.0.0 training
 - [ADR-WP12-03](#adr-wp12-03-17th-feature-for-segment-length-conditioning): 17th feature for segment-length conditioning
 
+### WP13 (GCN v4 Dynamic Generalization)
+- [ADR-WP13-01](#adr-wp13-01-30-threshold-for-dynamic-segment-labeling): 30% threshold for dynamic segment labeling
+- [ADR-WP13-02](#adr-wp13-02-wider-deeper-gcn-architecture-for-v4): Wider/deeper GCN architecture for v4
+- [ADR-WP13-03](#adr-wp13-03-strict-seed-pool-partitioning-for-no-leakage): Strict seed pool partitioning for no-leakage
+- [ADR-WP13-04](#adr-wp13-04-nap5-6-held-out-as-topology-generalization-test): nap5-6 held out as topology generalization test
+- [ADR-WP13-05](#adr-wp13-05-bias-diversity-in-training-set): Bias diversity in training set
+- [ADR-WP13-06](#adr-wp13-06-static-dynamic-folder-separation): Static/Dynamic folder separation
+- [ADR-WP13-07](#adr-wp13-07-synthetic-stitching-for-dynamic-training-data): Synthetic stitching for dynamic training data
+
 ---
 
 ## ADR-0001: Use GitHub SSH (ed25519) for Repo Access
@@ -973,3 +982,348 @@ Append `log2(segment_length) / 8.0` as a constant 17th feature to every node's f
 - WP12: GCN v3 multi-AP training
 - ADR-WP12-01: SIM_TIME=80s choice
 - ADR-WP12-02: nap1-4 scope
+
+---
+
+## ADR-WP13-01: 30% Threshold for Dynamic Segment Labeling
+
+### Status
+Accepted
+
+### Date
+2026-03-15
+
+### Context
+GCN v4 introduces per-segment labeling for dynamic files (files where `bias` changes mid-simulation). The original plan specified 50% majority vote: a segment is labeled Attack if more than half of its windows have `bias != 0`. However, a 50% threshold means that a segment with, say, 31% attack windows would be labeled Normal even though an attack is clearly underway in a meaningful fraction of the observation window.
+
+### Decision
+Use a 30% threshold: label a segment as Attack if more than 30% of its windows have `bias != 0`.
+
+### Rationale
+- A 30% threshold is more sensitive to early-onset attacks within a transition segment
+- In practice, transition segments often have 1/3 to 2/3 attack windows; a 30% threshold reliably labels these as Attack
+- Erring on the side of attack detection (lower false-negative rate) is preferable for a security system
+- Pure normal segments (0% attack windows) are still labeled Normal; pure attack segments (100%) are still labeled Attack
+
+### Implementation
+`twin/gnn/detector/gcn_src/data/dataset_v4.py` implements `get_label_from_segment_dynamic(segment, threshold=0.30)`.
+
+### Consequences
+
+#### Positive
+- More sensitive to early-phase attacks in transition segments
+- Lower false-negative rate for transition segments
+- Pure segments unaffected (0% or 100% is always below or above 30%)
+
+#### Negative
+- Segments with 30%-50% attack windows are labeled Attack; under 50% majority this would be Normal
+- Slightly higher false-positive rate for segments that are mostly normal with a short attack burst
+
+#### Mitigations
+- Class weights in training (`use_class_weights: true`) correct for any class imbalance introduced
+- Threshold can be adjusted as a hyperparameter if evaluation reveals FP-rate issues
+
+### Related
+- WP13: GCN v4 dynamic generalization
+- ADR-WP13-06: Static/Dynamic folder separation
+
+---
+
+## ADR-WP13-02: Wider/Deeper GCN Architecture for v4
+
+### Status
+Accepted
+
+### Date
+2026-03-15
+
+### Context
+GCN v3.0.0 uses `hidden_channels=64` and `num_layers=2`. v4 is trained on dynamic data with higher variance (phase transitions create more complex temporal patterns than static uniform-bias files). The question is whether to increase model capacity or keep v3 architecture unchanged.
+
+### Decision
+Increase to `hidden_channels=128` and `num_layers=3` for v4.0.0. Keep `in_channels=17` (backward compatible feature set).
+
+### Rationale
+- Dynamic segments have more complex, non-uniform feature distributions than static segments
+- A wider network (128 vs 64) can represent more diverse temporal patterns in one embedding
+- A third GCN layer provides more message-passing rounds, giving the model wider graph context
+- Residual connections in the architecture mitigate oversmoothing from the extra layer
+- The 16x increase in training data (2,878 files vs 48 files) justifies more capacity
+
+### Implementation
+`twin/gnn/trainer/training_v4.yaml` sets `hidden_channels: 128`, `num_layers: 3`, `dropout: 0.4` (vs v3: 64, 2, 0.3).
+`twin/gnn/detector/gcn_src/training/train_v4.py` uses these settings.
+
+### Consequences
+
+#### Positive
+- More capacity for complex phase-transition patterns
+- 3-layer message passing gives richer graph representations
+- Higher dropout (0.4 vs 0.3) prevents overfitting on the larger dataset
+
+#### Negative
+- Larger model: inference latency increases marginally (hidden=128 vs 64)
+- v4 checkpoint is not backward compatible with v3 registry entries (different architecture)
+
+#### Mitigations
+- Registry versioning (`current` symlink) ensures only one model serves at a time
+- Inference latency increase is negligible for the batch sizes used in production
+
+### Related
+- WP13: GCN v4 dynamic generalization
+- WP12: ADR-WP12-03 (17th feature; in_channels=17 unchanged in v4)
+
+---
+
+## ADR-WP13-03: Strict Seed Pool Partitioning for No-Leakage
+
+### Status
+Accepted
+
+### Date
+2026-03-15
+
+### Context
+GCN v3 used seeds 42/43/44/45 for training and a random 80/20 file split for validation. This approach risks leakage when the same seed appears in both train and val sets (different bias values, but correlated noise patterns from the simulation RNG). v4 requires stricter controls because dynamic stitching creates files that inherit seed-correlated patterns from their static sources.
+
+### Decision
+Use three strictly disjoint seed pools with no overlap:
+- Train: 42, 111, 123, 222, 321, 333, 456, 654, 789, 987 (10 seeds)
+- Val: 444, 777, 888 (3 seeds)
+- Test: 555, 999, 1234 (3 seeds)
+
+No file from one pool may appear in any other pool, including synthetically stitched files.
+
+### Rationale
+- Prevents simulation-RNG correlation leakage between splits
+- Synthetic stitching inherits seed identity from source files; same seed pool guarantee means stitched dynamic files from train seeds only appear in the train split
+- Enables genuine generalization measurement: test F1 measures performance on seeds the model has never seen
+- Phase patterns (dynamic scenarios) are also split: T-group patterns only in test
+
+### Implementation
+`sim/ns3/scenario/collect_v4_static_data.sh` enforces seed assignments per split.
+`twin/gnn/stitch_dynamic.py` only stitches files within the same split.
+`twin/gnn/detector/gcn_src/data/dataset_v4.py`'s `load_v4_files()` reads from pre-partitioned folders.
+
+### Consequences
+
+#### Positive
+- True generalization measurement at test time
+- No seed-correlation leakage between train, val, and test
+- Dynamic stitching is leakage-safe by construction
+
+#### Negative
+- Smaller train pool (10 seeds) than would be available without partitioning
+- Cannot use random splits; must maintain folder structure discipline
+
+#### Mitigations
+- 10 train seeds provide sufficient diversity for the training set
+- Folder structure makes the split explicit and auditable
+
+### Related
+- WP13: GCN v4 dynamic generalization
+- ADR-WP13-07: Synthetic stitching
+
+---
+
+## ADR-WP13-04: nap5-6 Held Out as Topology Generalization Test
+
+### Status
+Accepted
+
+### Date
+2026-03-15
+
+### Context
+GCN v3 was trained on nap1-4 only (nap5-6 deferred due to simulation time; ADR-WP12-02). v4 continues using nap1-4 for training data because nap5+ run times remain impractical. However, v4 adds a topology generalization evaluation on nap5-6 using test-split data to measure zero-shot performance.
+
+### Decision
+Train v4 on nap1-4 only. Include nap5/6 runs in the test split (for topology generalization measurement) but never in train or val.
+
+### Rationale
+- nap5 runs take approximately 2.5 hours each at SIM_TIME=80s; adding nap5/6 to training is impractical
+- Holding out nap5-6 from training creates a valuable zero-shot topology generalization evaluation
+- Expected v4 performance on nap5-6: F1 >= 0.92 (since multi-AP normalisation is topology-agnostic)
+- This directly answers the research question: "Does the model generalise to unseen network sizes?"
+
+### Implementation
+`sim/ns3/scenario/collect_v4_static_data.sh` limits AP/STA pairs to nap1-4 for train and val splits.
+Test set includes nap5/6 runs (planned; not yet collected as of 2026-03-15).
+
+### Consequences
+
+#### Positive
+- Topology generalization evaluated rigorously on held-out configurations
+- Addresses the main limitation of v3.0.0 (no nap5/6 coverage)
+
+#### Negative
+- nap5/6 not in training; model may underperform on these topologies compared to nap1-4
+- Test collection for nap5/6 not yet done (pending)
+
+#### Mitigations
+- Multi-AP normalisation (dividing by num_ap/num_sta) is the primary mechanism for topology generalization
+- If topology generalization F1 is below target, nap5/6 can be added to v4.1.0 training data using SIM_TIME=30s (45min per run)
+
+### Related
+- WP12: ADR-WP12-02 (nap1-4 only for v3.0.0)
+- WP13: GCN v4 dynamic generalization
+
+---
+
+## ADR-WP13-05: Bias Diversity in Training Set
+
+### Status
+Accepted
+
+### Date
+2026-03-15
+
+### Context
+GCN v3 was trained only on bias=±5000. The 54-experiment evaluation showed v3 detects attacks at bias=1000 (one-fifth of training bias), but it has not been trained to distinguish weak attacks from normal traffic. v4 must generalise across a wider range of attack strengths.
+
+### Decision
+Train v4 on three bias levels: ±1000, ±2000, ±5000 for the static training split. Validation uses ±5000. Test set additionally includes ±500, ±4000 to measure interpolation and boundary performance.
+
+### Rationale
+- Including ±1000 and ±2000 in training teaches the model to detect weak attacks, not just strong ones
+- ±5000 as the common bias across all splits ensures train/val/test comparability
+- Excluding ±500 from training creates a boundary-generalization test
+- Excluding ±4000 from training tests interpolation between trained bias values
+
+### Implementation
+`sim/ns3/scenario/collect_v4_static_data.sh` hardcodes `TRAIN_BIASES=(1000 2000 5000)`, `VAL_BIASES=(5000)`, `TEST_BIASES=(500 1000 2000 4000 5000)`.
+
+### Consequences
+
+#### Positive
+- Model trained to detect both weak and strong attacks
+- Validation remains simple (single bias)
+- Test set covers interpolation, boundary, and extrapolation points
+
+#### Negative
+- More static training files required (3 bias levels vs 1 for v3)
+- Imbalanced attack-to-normal ratio in static training data (165 Attack vs 28 Normal files)
+
+#### Mitigations
+- `use_class_weights: true` in training config corrects for class imbalance
+- Normal files come from bias=0 simulations (no need to vary bias for normal class)
+
+### Related
+- WP13: GCN v4 dynamic generalization
+- ADR-WP13-03: Seed pool partitioning
+
+---
+
+## ADR-WP13-06: Static/Dynamic Folder Separation
+
+### Status
+Accepted
+
+### Date
+2026-03-15
+
+### Context
+v4 training data combines static files (uniform bias throughout) and dynamic files (bias changes mid-simulation). These require different labeling strategies: static files use file-level labels; dynamic files require per-segment majority-vote labeling. The question is how to distinguish them at load time.
+
+Options:
+1. Filename convention: embed `_dynamic_` in filename, parse at load time
+2. Separate folders: `Static/` and `Dynamic/` subdirectories within each split
+3. Metadata sidecar: JSON file per data file indicating labeling strategy
+
+### Decision
+Use separate `Static/{Normal,Attack}/` and `Dynamic/` subdirectories within each split folder. The dataset loader detects the parent folder name to select the labeling strategy.
+
+### Rationale
+- Folder structure is explicit and auditable without filename parsing
+- Static Normal/Attack separation preserves existing v3 labeling convention
+- Dynamic folder avoids needing a separate `Normal/Attack` distinction at the file level (label is per-segment)
+- No additional metadata files needed
+- Works cleanly with `load_v4_files()` which walks the pre-partitioned directory tree
+
+### Implementation
+```
+twin/gnn/training_data/v4/
+  train/
+    Static/Normal/   ← file-level label=0
+    Static/Attack/   ← file-level label=1
+    Dynamic/         ← per-segment majority-vote label
+  val/  (same structure)
+  test/ (same structure)
+```
+`dataset_v4.py` checks `'Static/Normal' in filepath`, `'Static/Attack' in filepath`, or `'Dynamic' in filepath` to select labeling.
+
+### Consequences
+
+#### Positive
+- Clear labeling strategy per file, determined by folder membership
+- No filename parsing needed
+- Folder structure is self-documenting
+
+#### Negative
+- Must maintain folder discipline when adding new files
+- File accidentally placed in wrong folder gets wrong labeling strategy
+
+#### Mitigations
+- Collection scripts write directly to the correct subdirectory
+- `stitch_dynamic.py` only writes to `Dynamic/` folders
+
+### Related
+- WP13: GCN v4 dynamic generalization
+- ADR-WP13-01: 30% threshold for dynamic labeling
+- ADR-WP13-07: Synthetic stitching
+
+---
+
+## ADR-WP13-07: Synthetic Stitching for Dynamic Training Data
+
+### Status
+Accepted
+
+### Date
+2026-03-15
+
+### Context
+The original v4 plan required running 528+ NS-3 dynamic simulations to generate dynamic training data (each with a unique phase pattern, AP count, seed, and duration). At ~30-60s per simulation, this would take approximately 85 minutes with 8 parallel cores but requires all combinations to be explicitly simulated.
+
+An alternative approach: synthesize dynamic files by concatenating window slices from existing static source files. Each "phase" in a dynamic file is represented by a slice of 400 windows taken from the middle of a 800-window static source file with the matching bias value.
+
+### Decision
+Generate dynamic training data synthetically by stitching together static source files using `twin/gnn/stitch_dynamic.py`. Each phase is 400 windows from windows[200:600] of a matching static source file. Phases are offset [200, 0, 400] to avoid reusing the same source windows across phases when all phases share the same source seed.
+
+### Rationale
+- Produces far more dynamic training files than NS-3 simulation alone: 1,852 train files vs 528 planned
+- No additional simulation time required beyond already-collected static data
+- Phase transitions are reproduced faithfully: the `bias` field in each window reflects the source file's bias, creating realistic attack-onset and attack-offset patterns within a single stitched file
+- No-leakage guarantee: source files are only stitched within the split they belong to (train seeds only stitched into train dynamic files)
+- Skip-if-exists logic makes the stitching resumable
+
+### Implementation
+`twin/gnn/stitch_dynamic.py`:
+- Phase slicing: `source_windows[offset + 200 : offset + 600]` (400 windows per phase)
+- Phase offsets: [200, 0, 400] to differentiate source windows across phases of the same seed/bias
+- 30 phase patterns (groups A/B/C/D/E/T) as defined in the phase pattern catalogue
+- Per-split output to `twin/gnn/training_data/v4/{split}/Dynamic/`
+- Bias variants for training patterns (_b1000, _b2000 suffixes)
+
+### Consequences
+
+#### Positive
+- 3.5x more dynamic training files than originally planned (1,852 vs 528)
+- Faster to generate (stitching is a file I/O operation, not a simulation)
+- Dataset can be regenerated from existing static source files at any time
+- Consistent with no-leakage requirements
+
+#### Negative
+- Stitched transitions are artificial: adjacent phases share no simulation state (no gradual backoff reset, no hidden Markov state across the phase boundary)
+- The model trained on stitched data may not generalise perfectly to real NS-3 dynamic simulations where the underlying simulation state transitions gradually
+- Requires existing static source files to be present before stitching can run
+
+#### Mitigations
+- Dynamic evaluation benchmark uses real NS-3 dynamic runs (not stitched files), so the model is evaluated on authentic transition data
+- If stitching-trained model underperforms on authentic dynamic runs, NS-3 simulated dynamic data can be collected and added to the training set
+- `stitch_dynamic.py --dry-run` verifies source file availability before generating
+
+### Related
+- WP13: GCN v4 dynamic generalization
+- ADR-WP13-03: Strict seed pool partitioning
+- ADR-WP13-06: Static/Dynamic folder separation
