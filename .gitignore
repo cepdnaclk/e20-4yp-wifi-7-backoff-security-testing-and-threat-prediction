@@ -61,3 +61,11 @@ tests/test-results/
 twin/registry/gcn/*/checkpoints/
 twin/registry/gcn/*/logs/
 
+# GNN training data (large — generated locally, not committed)
+twin/gnn/training_data/
+
+# Session screenshots (root-level PNGs)
+/*.png
+
+# Local backups
+backups/

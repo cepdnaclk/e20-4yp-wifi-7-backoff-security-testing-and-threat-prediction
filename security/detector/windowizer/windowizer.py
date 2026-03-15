@@ -46,6 +46,15 @@ class Windowizer:
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
 
+        # Allow runtime overrides via env vars (for benchmarking different configurations)
+        import os
+        if os.environ.get('SEGMENT_LENGTH'):
+            self.config['windowing']['segment_length'] = int(os.environ['SEGMENT_LENGTH'])
+        if os.environ.get('KAFKA_GROUP'):
+            self.config['kafka']['consumer_group'] = os.environ['KAFKA_GROUP']
+        if os.environ.get('KAFKA_AUTO_OFFSET_RESET'):
+            self.config['kafka']['auto_offset_reset'] = os.environ['KAFKA_AUTO_OFFSET_RESET']
+
         logger.info("Loaded configuration")
 
         # Initialize components

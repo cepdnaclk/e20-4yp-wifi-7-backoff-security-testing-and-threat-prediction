@@ -121,6 +121,86 @@ def _write_status(exp_id: str, stage: str, state: str, message: str = ""):
     except Exception as e:
         logger.warning(f"Could not write status file: {e}")
 
+# ── Windowizer reconfiguration ────────────────────────────────────────────────
+
+WINDOWIZER_CONTAINER = "ndt-pipeline-windowizer"
+_default_segment_length = 256  # restored after dynamic runs
+
+
+async def _reconfigure_windowizer(segment_length: int, host_repo: str) -> None:
+    """Recreate the windowizer container with an updated SEGMENT_LENGTH env var."""
+    import socket as _socket
+
+    def _docker(method: str, path: str, body: bytes = b"") -> dict:
+        s = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+        s.settimeout(20)
+        s.connect("/var/run/docker.sock")
+        req = (
+            f"{method} {path} HTTP/1.0\r\nHost: localhost\r\n"
+            f"Content-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n"
+        ).encode() + body
+        s.sendall(req)
+        resp = b""
+        while True:
+            chunk = s.recv(65536)
+            if not chunk:
+                break
+            resp += chunk
+        s.close()
+        hdr_end = resp.find(b"\r\n\r\n")
+        raw = resp[hdr_end + 4:] if hdr_end >= 0 else resp
+        try:
+            return json.loads(raw) if raw.strip() else {}
+        except Exception:
+            return {}
+
+    try:
+        # Inspect current container to get its config
+        cfg = _docker("GET", f"/containers/{WINDOWIZER_CONTAINER}/json")
+        if not cfg:
+            raise RuntimeError("Failed to inspect windowizer container")
+
+        # Build updated env list — set SEGMENT_LENGTH + fresh consumer group with latest offset
+        old_env = cfg.get("Config", {}).get("Env", [])
+        new_env = [e for e in old_env if not e.startswith(("SEGMENT_LENGTH=", "KAFKA_GROUP=", "KAFKA_AUTO_OFFSET_RESET="))]
+        new_env.append(f"SEGMENT_LENGTH={segment_length}")
+        if segment_length != _default_segment_length:
+            # Fresh consumer group so we only process data published after restart (no old Kafka backlog)
+            new_env.append(f"KAFKA_GROUP=windowizer-benchmark-{segment_length}w")
+            new_env.append("KAFKA_AUTO_OFFSET_RESET=latest")
+        else:
+            new_env.append("KAFKA_GROUP=windowizer-gcn-v1")
+            new_env.append("KAFKA_AUTO_OFFSET_RESET=earliest")
+
+        image = cfg["Config"]["Image"]
+        network_mode = cfg["HostConfig"]["NetworkMode"]
+        binds = cfg["HostConfig"].get("Binds") or []
+
+        # Stop + remove old container
+        _docker("POST", f"/containers/{WINDOWIZER_CONTAINER}/stop")
+        await asyncio.sleep(2)
+        _docker("DELETE", f"/containers/{WINDOWIZER_CONTAINER}?force=true")
+        await asyncio.sleep(1)
+
+        # Create new container with updated env
+        create_body = json.dumps({
+            "Image": image,
+            "Env": new_env,
+            "HostConfig": {
+                "NetworkMode": network_mode,
+                "Binds": binds,
+                "RestartPolicy": {"Name": "unless-stopped"},
+            },
+        }).encode()
+        _docker("POST", f"/containers/create?name={WINDOWIZER_CONTAINER}", create_body)
+        _docker("POST", f"/containers/{WINDOWIZER_CONTAINER}/start")
+
+        await asyncio.sleep(8)  # wait for startup
+        logger.info(f"Windowizer recreated with SEGMENT_LENGTH={segment_length}")
+    except Exception as e:
+        logger.warning(f"Could not reconfigure windowizer to seg_len={segment_length}: {e}")
+
+
 # ── Background runner ─────────────────────────────────────────────────────────
 
 async def _run_experiment(req: LaunchRequest, exp_id: str):
@@ -129,6 +209,10 @@ async def _run_experiment(req: LaunchRequest, exp_id: str):
     host_repo = os.environ.get("HOST_REPO_PATH", "/repo")
 
     if req.scenario == "dynamic":
+        # Reconfigure windowizer to use the requested segment length before running.
+        seg_len = req.segment_length or 256
+        await _reconfigure_windowizer(seg_len, host_repo)
+
         # Dynamic scenario: bias changes mid-simulation per phase schedule.
         # Routes to make run-mlo-dynamic (NS-3) then exporter-run, chained via bash.
         phases_str = req.phases or "0:0"
@@ -258,6 +342,11 @@ async def _run_experiment(req: LaunchRequest, exp_id: str):
         entry["completed_at"] = datetime.now(timezone.utc).isoformat()
         _active_process = None
         _active_exp_id = None
+        # After dynamic run: wait for windowizer to drain Kafka, then restore default seg_len
+        if req.scenario == "dynamic":
+            await asyncio.sleep(30)  # give windowizer time to finish processing segments
+            if req.segment_length != _default_segment_length:
+                await _reconfigure_windowizer(_default_segment_length, host_repo)
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 

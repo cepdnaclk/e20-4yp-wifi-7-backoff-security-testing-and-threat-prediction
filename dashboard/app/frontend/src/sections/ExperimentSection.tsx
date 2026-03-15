@@ -125,10 +125,14 @@ function PredTable({
   predictions,
   label,
   accentColor,
+  selectedIdx,
+  onSelect,
 }: {
   predictions: import('../types/experiments').Prediction[]
   label?: string
   accentColor?: string
+  selectedIdx?: number | null
+  onSelect?: (idx: number | null) => void
 }) {
   return (
     <div className="overflow-x-auto">
@@ -136,6 +140,9 @@ function PredTable({
         <div className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: accentColor }}>
           <span>●</span> {label}
         </div>
+      )}
+      {onSelect && (
+        <div className="text-xs mb-2 opacity-50">Click a row to highlight it on the graph above</div>
       )}
       <table className="w-full text-sm">
         <thead>
@@ -152,25 +159,34 @@ function PredTable({
           </tr>
         </thead>
         <tbody>
-          {predictions.slice(0, 50).map((p) => (
-            <tr
-              key={p.id}
-              style={{
-                borderBottom: '1px solid rgba(166,180,200,0.15)',
-                background: p.prediction === 1 ? 'rgba(232,93,106,0.04)' : undefined,
-              }}
-            >
-              <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>{p.segment_number}</td>
-              <td className="py-2 px-3">
-                <Badge variant={p.prediction === 1 ? 'attack' : 'normal'} label={p.prediction_label} />
-              </td>
-              <td className="py-2 px-3 font-semibold">{(p.confidence * 100).toFixed(1)}%</td>
-              <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>
-                {p.window_start_idx}–{p.window_end_idx}
-              </td>
-              <td className="py-2 px-3 text-xs">{p.inference_time_ms?.toFixed(2) ?? '—'}</td>
-            </tr>
-          ))}
+          {predictions.slice(0, 50).map((p, i) => {
+            const isSelected = selectedIdx === i
+            const rowColor = p.prediction === 1 ? 'rgba(232,93,106,' : 'rgba(72,187,120,'
+            return (
+              <tr
+                key={p.id}
+                onClick={() => onSelect?.(isSelected ? null : i)}
+                style={{
+                  borderBottom: '1px solid rgba(166,180,200,0.15)',
+                  background: isSelected
+                    ? `${rowColor}0.18)`
+                    : p.prediction === 1 ? `${rowColor}0.04)` : undefined,
+                  cursor: onSelect ? 'pointer' : undefined,
+                  outline: isSelected ? `1px solid ${rowColor}0.5)` : undefined,
+                }}
+              >
+                <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>{p.segment_number}</td>
+                <td className="py-2 px-3">
+                  <Badge variant={p.prediction === 1 ? 'attack' : 'normal'} label={p.prediction_label} />
+                </td>
+                <td className="py-2 px-3 font-semibold">{(p.confidence * 100).toFixed(1)}%</td>
+                <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>
+                  {p.window_start_idx}–{p.window_end_idx}
+                </td>
+                <td className="py-2 px-3 text-xs">{p.inference_time_ms?.toFixed(2) ?? '—'}</td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -211,6 +227,7 @@ export default function ExperimentSection() {
   const [selectedMetric, setSelectedMetric] = useState('avg_backoff_slots')
   const [compareId, setCompareId] = useState<string | null>(null)
   const [compareMode, setCompareMode] = useState(false)
+  const [selectedPredIdx, setSelectedPredIdx] = useState<number | null>(null)
 
   // Date range filter — default: last 24h
   const [dateFrom, setDateFrom] = useState(() => {
@@ -255,6 +272,27 @@ export default function ExperimentSection() {
   const [primaryAp, setPrimaryAp] = useState<ApFilter>('all')
   const [compareScenario, setCompareScenario] = useState<ScenarioFilter>('all')
   const [compareAp, setCompareAp] = useState<ApFilter>('all')
+
+  // Build segment boundary marks from predictions (ts_start of each segment)
+  const segmentMarks = useMemo(() => {
+    if (!preds?.predictions?.length) return []
+    return preds.predictions.map((p, i) => ({
+      ts: p.ts_start ?? '',
+      color: p.prediction === 1 ? 'var(--color-attack)' : 'var(--color-normal)',
+      label: `${i + 1}`,
+    })).filter(m => m.ts)
+  }, [preds])
+
+  // Highlight for selected prediction row
+  const highlight = useMemo(() => {
+    if (selectedPredIdx === null || !preds?.predictions?.[selectedPredIdx]) return null
+    const p = preds.predictions[selectedPredIdx]
+    return {
+      tsStart: p.ts_start ?? '',
+      tsEnd: p.ts_end ?? '',
+      color: p.prediction === 1 ? 'var(--color-attack)' : 'var(--color-normal)',
+    }
+  }, [selectedPredIdx, preds])
 
   const experiments: Experiment[] = expList?.experiments || []
   const primaryFiltered = useMemo(
@@ -477,6 +515,8 @@ export default function ExperimentSection() {
                 height={220}
                 compareData={compareMode && compareSeries ? compareSeries.points : undefined}
                 compareName={compareMode && compareId ? compareLabel : undefined}
+                segmentMarks={segmentMarks}
+                highlight={highlight}
               />
             ) : (
               <LoadingSpinner />
@@ -493,6 +533,8 @@ export default function ExperimentSection() {
                   predictions={preds.predictions}
                   label={compareMode && compareId ? primaryLabel : undefined}
                   accentColor={compareMode && compareId ? (METRIC_COLORS[selectedMetric] || 'var(--color-brand)') : undefined}
+                  selectedIdx={selectedPredIdx}
+                  onSelect={setSelectedPredIdx}
                 />
                 {/* Compare */}
                 {compareMode && compareId && comparePreds && comparePreds.predictions.length > 0 && (

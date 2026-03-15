@@ -212,6 +212,17 @@ if ! [[ "${WINDOW_COUNT}" =~ ^[0-9]+$ ]]; then WINDOW_COUNT=0; fi
 echo "JSON output created: ${WINDOW_COUNT} windows (${FILE_SIZE} bytes)"
 write_pipeline_status "ns3" "active" "${WINDOW_COUNT}" "$((WINDOW_COUNT * 13))"
 
+# --- Copy to v4 dynamic training data if requested ---
+# V4_DATA_DIR = destination directory (e.g. twin/gnn/training_data/v4/Dynamic)
+# V4_TAG = canonical filename tag (without .json)
+if [ -n "${V4_COLLECT:-}" ]; then
+    V4_DEST_DIR="${V4_DATA_DIR:-twin/gnn/training_data/v4/Dynamic}"
+    V4_FILE_TAG="${V4_TAG:-${EXP_ID}_dynamic}"
+    mkdir -p "${V4_DEST_DIR}"
+    cp "${JSON_OUTPUT}" "${V4_DEST_DIR}/${V4_FILE_TAG}.json"
+    echo "[v4collect] Saved ${V4_DEST_DIR}/${V4_FILE_TAG}.json"
+fi
+
 # --- Convert to JSONL ---
 echo "Converting JSON to JSONL format..."
 /work/sim/ns3/scenario/convert_mlo_json_to_jsonl.sh \

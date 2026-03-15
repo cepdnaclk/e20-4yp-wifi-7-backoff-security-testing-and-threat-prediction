@@ -1,0 +1,20 @@
+{
+  "accuracy": 0.9983470098589055,
+  "precision": 1.0,
+  "recall": 0.9975237309120925,
+  "f1": 0.9987603305785124,
+  "auc": 0.9999905760161898,
+  "confusion_matrix": [
+    [
+      16895,
+      0
+    ],
+    [
+      84,
+      33838
+    ]
+  ],
+  "best_epoch": 16,
+  "best_val_f1": 1.0,
+  "dynamic_label_threshold": 0.3
+}

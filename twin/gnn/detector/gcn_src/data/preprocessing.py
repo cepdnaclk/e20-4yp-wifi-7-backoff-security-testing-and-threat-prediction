@@ -343,7 +343,7 @@ def extract_features(
 
 def get_label_from_windows(windows: List[Dict]) -> int:
     """
-    Extract label from window data.
+    Extract label from window data (static files — all windows same bias).
 
     Label is determined by the 'bias' field:
     - bias == 0: Normal behavior (label = 0)
@@ -355,14 +355,48 @@ def get_label_from_windows(windows: List[Dict]) -> int:
     Returns:
         Binary label: 0 (Normal) or 1 (Attack)
     """
-    # All windows in a file have the same bias value
-    # Check first window
+    # All windows in a static file have the same bias value
     bias = windows[0].get('bias', 0)
+    return 1 if bias != 0 else 0
 
-    # Binary classification
-    label = 1 if bias != 0 else 0
 
-    return label
+def get_label_from_segment_dynamic(segment: List[Dict], threshold: float = 0.5) -> int:
+    """
+    Majority-vote label for a single segment from a dynamic (multi-phase) file.
+
+    In dynamic files, each window has its own 'bias' value (changes mid-simulation).
+    A segment label is determined by the fraction of attack windows in that segment:
+    - If fraction of windows with bias != 0 > threshold → Attack (label = 1)
+    - Otherwise → Normal (label = 0)
+
+    This correctly handles:
+    - Pure segments (100% same bias) → exact label
+    - Transition segments (mixed bias) → majority-vote label
+    - Weak-attack segments (short attack phase in segment) → natural classification
+
+    Args:
+        segment: List of window dicts for a single segment (all from same file)
+        threshold: Fraction of attack windows required to call segment an attack.
+                   Default 0.5 = strict majority vote.
+
+    Returns:
+        Binary label: 0 (Normal) or 1 (Attack)
+
+    Example:
+        >>> # Segment spanning neg→norm transition: 180 neg + 76 norm windows
+        >>> seg = [{'bias': -5000}]*180 + [{'bias': 0}]*76
+        >>> get_label_from_segment_dynamic(seg)
+        1  # 180/256 = 70% attack → Attack
+
+        >>> # Segment in normal phase: all bias=0
+        >>> seg = [{'bias': 0}]*256
+        >>> get_label_from_segment_dynamic(seg)
+        0  # 0% attack → Normal
+    """
+    if not segment:
+        return 0
+    attack_count = sum(1 for w in segment if w.get('bias', 0) != 0)
+    return 1 if attack_count / len(segment) > threshold else 0
 
 
 # Utility function for validation

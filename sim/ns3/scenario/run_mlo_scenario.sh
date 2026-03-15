@@ -22,7 +22,7 @@ set -euo pipefail
 EXP_ID="${1:-}"
 SCENARIO="${2:-}"
 SEED="${SEED:-${3:-42}}"
-BIAS_OVERRIDE="${4:-}"
+BIAS_OVERRIDE="${4:-${BIAS:-}}"  # positional arg 4 or BIAS env var
 SIM_TIME="${SIM_TIME:-${5:-50.0}}"
 NAP="${NAP:-1}"      # Number of access points (default: 1, unchanged)
 NSTA="${NSTA:-2}"    # Stations per AP (default: 2, unchanged)
@@ -257,6 +257,17 @@ if [ -n "${V3_COLLECT:-}" ]; then
         cp "${JSON_OUTPUT}" "${LABEL_DIR}/Attack/${TAG}.json"
         echo "[collect] Saved Attack/${TAG}.json"
     fi
+fi
+
+# --- Copy to v4 static training data if requested ---
+# V4_DATA_DIR is the destination directory (e.g. twin/gnn/training_data/v4/Static/Normal)
+# V4_TAG is the canonical filename tag (without .json)
+if [ -n "${V4_COLLECT:-}" ]; then
+    V4_DEST_DIR="${V4_DATA_DIR:-twin/gnn/training_data/v4/Static}"
+    V4_FILE_TAG="${V4_TAG:-nap${NAP}_nsta${NSTA}_seed${SEED}_${SCENARIO}_${SIM_TIME}s}"
+    mkdir -p "${V4_DEST_DIR}"
+    cp "${JSON_OUTPUT}" "${V4_DEST_DIR}/${V4_FILE_TAG}.json"
+    echo "[v4collect] Saved ${V4_DEST_DIR}/${V4_FILE_TAG}.json"
 fi
 
 # --- Convert to JSONL ---
