@@ -38,15 +38,17 @@ interface SegmentBlock {
   count: number             // repetitions (only when !transition)
 }
 
-function biasOf(t: PhaseType): number {
-  if (t === 'positive') return 5000
-  if (t === 'negative') return -5000
+function biasOf(t: PhaseType, posBias: number, negBias: number): number {
+  if (t === 'positive') return posBias
+  if (t === 'negative') return -negBias
   return 0
 }
 
 function computePhasesAndSimTime(
   blocks: SegmentBlock[],
   segLen: number,
+  posBias: number,
+  negBias: number,
 ): { phases: string; simTime: number; totalSegments: number } {
   const segDur = segLen * 0.1
   let t = 0
@@ -55,7 +57,7 @@ function computePhasesAndSimTime(
   let totalSegments = 0
 
   for (const blk of blocks) {
-    const primBias = biasOf(blk.primaryType)
+    const primBias = biasOf(blk.primaryType, posBias, negBias)
 
     if (primBias !== curBias) {
       parts.push(`${Math.round(t)}:${primBias}`)
@@ -65,7 +67,7 @@ function computePhasesAndSimTime(
     if (blk.transition) {
       totalSegments += 1
       const splitT = t + (blk.splitPercent / 100) * segDur
-      const secBias = biasOf(blk.secondaryType)
+      const secBias = biasOf(blk.secondaryType, posBias, negBias)
       parts.push(`${Math.round(splitT)}:${secBias}`)
       curBias = secBias
       t += segDur
@@ -124,6 +126,8 @@ export default function RunSection() {
 
   // Dynamic segment builder
   const [segmentBlocks, setSegmentBlocks] = useState<SegmentBlock[]>(DEFAULT_BLOCKS)
+  const [posBias, setPosBias] = useState(5000)
+  const [negBias, setNegBias] = useState(5000)
   const blockIdCounter = useRef(10)
 
   // Benchmark state
@@ -146,7 +150,7 @@ export default function RunSection() {
   }, [activeVersion])
 
   // Computed phases & sim time from segment builder
-  const computed = computePhasesAndSimTime(segmentBlocks, segmentLength)
+  const computed = computePhasesAndSimTime(segmentBlocks, segmentLength, posBias, negBias)
 
   const autoExpId = generateExpId(scenario, numAp, seed, gcnVersion)
 
@@ -203,7 +207,7 @@ export default function RunSection() {
 
   // Reference phases/simTime always computed from 256w — keeps scenario identical across all window sizes.
   // Only the windowizer segment_length changes so the comparison is fair.
-  const refComputed = computePhasesAndSimTime(segmentBlocks, 256)
+  const refComputed = computePhasesAndSimTime(segmentBlocks, 256, posBias, negBias)
 
   const buildDynamicReq = (sl: number, expIdOverride?: string): LaunchRequest => ({
     scenario: 'dynamic',
@@ -426,6 +430,31 @@ export default function RunSection() {
                 <span className="text-xs" style={{ color: 'var(--color-brand)' }}>
                   {computed.totalSegments} segments · {computed.simTime}s (at {segmentLength}w)
                 </span>
+              </div>
+
+              {/* Bias controls */}
+              <div className="flex gap-3 flex-wrap mb-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold" style={{ color: 'var(--color-attack)' }}>+Attack bias</span>
+                  <input
+                    type="number" min={100} max={20000} step={500}
+                    value={posBias}
+                    onChange={e => setPosBias(Math.max(100, Number(e.target.value)))}
+                    className="neu-inset text-xs font-mono outline-none px-1.5 py-0.5"
+                    style={{ width: 72, color: 'var(--color-attack)' }}
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold" style={{ color: 'var(--color-warning)' }}>−Attack bias</span>
+                  <input
+                    type="number" min={100} max={20000} step={500}
+                    value={negBias}
+                    onChange={e => setNegBias(Math.max(100, Number(e.target.value)))}
+                    className="neu-inset text-xs font-mono outline-none px-1.5 py-0.5"
+                    style={{ width: 72, color: 'var(--color-warning)' }}
+                  />
+                </div>
+                <span className="text-xs self-center opacity-40">(default 5000 each)</span>
               </div>
 
               {segmentBlocks.map((blk, idx) => (
