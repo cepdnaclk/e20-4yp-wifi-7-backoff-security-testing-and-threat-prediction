@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: UDR-Postgres
+    uid: udr_postgres
+    type: postgres
+    access: proxy
+    url: udr-db:5432
+    user: udr
+    secureJsonData:
+      password: udr_pass
+    jsonData:
+      database: udr
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: true
+    isDefault: true

@@ -1,0 +1,32 @@
+batch_size: 64
+checkpoint_dir: ../../registry/gcn/v4.0.0/checkpoints
+data_root: ../training_data/v4
+device: cuda
+dropout: 0.4
+hidden_channels: 128
+in_channels: 17
+learning_rate: 0.0005
+log_dir: ../../registry/gcn/v4.0.0/logs
+max_epochs: 300
+multi_ap_normalise: true
+num_layers: 3
+patience: 30
+pooling: mean
+random_seed: 42
+segment_length: 256
+segment_lengths:
+- 32
+- 64
+- 128
+- 256
+segment_strides:
+  32: 32
+  64: 64
+  128: 128
+  256: 64
+stride: 256
+test_size: 0.0
+use_class_weights: true
+use_derived_features: true
+val_size: 0.0
+weight_decay: 0.0001

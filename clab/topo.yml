@@ -1,0 +1,51 @@
+name: ndt-wifi7-mlo-security
+
+mgmt:
+  network: clab-mgmt
+  ipv4-subnet: 172.30.20.0/24
+
+topology:
+  nodes:
+    bus-redpanda:
+      kind: linux
+      image: redpandadata/redpanda:latest
+      mgmt-ipv4: 172.30.20.10
+      ports:
+        - "9092:9092"   # Kafka API
+        - "9644:9644"   # Admin/metrics
+      cmd: >
+        redpanda start
+        --overprovisioned
+        --smp 1
+        --memory 1G
+        --reserve-memory 0M
+        --node-id 0
+        --check=false
+        --kafka-addr 0.0.0.0:9092
+        --advertise-kafka-addr bus-redpanda:9092
+
+    udr-db:
+      kind: linux
+      image: timescale/timescaledb:latest-pg16
+      mgmt-ipv4: 172.30.20.20
+      ports:
+        - "5432:5432"
+      env:
+        POSTGRES_USER: udr
+        POSTGRES_PASSWORD: udr_pass
+        POSTGRES_DB: udr
+      binds:
+        - configs/udr-db/initdb:/docker-entrypoint-initdb.d:ro
+
+    grafana:
+      kind: linux
+      image: grafana/grafana:latest
+      mgmt-ipv4: 172.30.20.30
+      ports:
+        - "3000:3000"
+      env:
+        GF_SECURITY_ADMIN_USER: admin
+        GF_SECURITY_ADMIN_PASSWORD: admin
+      binds:
+        - configs/grafana/provisioning:/etc/grafana/provisioning:ro
+        - configs/grafana/dashboards:/var/lib/grafana/dashboards:ro

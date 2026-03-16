@@ -1,0 +1,54 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "wifi7.telemetry.v0_1",
+    "type": "object",
+    "required": [
+        "experiment_id",
+        "ts",
+        "source",
+        "schema_version",
+        "entity_id",
+        "metric",
+        "value",
+        "unit"
+    ],
+    "properties": {
+        "experiment_id": {
+            "type": "string",
+            "minLength": 3
+        },
+        "ts": {
+            "description": "Event time. ISO-8601 string (recommended) or epoch milliseconds.",
+            "oneOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "integer"
+                }
+            ]
+        },
+        "source": {
+            "type": "string"
+        },
+        "schema_version": {
+            "type": "string",
+            "enum": [
+                "v0.1"
+            ]
+        },
+        "entity_id": {
+            "type": "string"
+        },
+        "metric": {
+            "type": "string"
+        },
+        "value": {
+            "type": "number"
+        },
+        "unit": {
+            "type": "string"
+        }
+    },
+    "additionalProperties": true
+}

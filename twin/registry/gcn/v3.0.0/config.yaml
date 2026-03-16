@@ -1,0 +1,32 @@
+batch_size: 32
+checkpoint_dir: /output/checkpoints
+data_root: /data
+device: cpu
+dropout: 0.3
+hidden_channels: 64
+in_channels: 17
+learning_rate: 0.001
+log_dir: /output/logs
+max_epochs: 200
+multi_ap_normalise: true
+num_layers: 2
+patience: 20
+pooling: mean
+random_seed: 42
+segment_length: 256
+segment_lengths:
+- 32
+- 64
+- 128
+- 256
+segment_strides:
+  32: 32
+  64: 64
+  128: 128
+  256: 64
+stride: 256
+test_size: 0.15
+use_class_weights: true
+use_derived_features: true
+val_size: 0.15
+weight_decay: 0.0001

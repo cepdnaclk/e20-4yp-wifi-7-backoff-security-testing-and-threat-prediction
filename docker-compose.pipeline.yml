@@ -1,0 +1,106 @@
+# Docker Compose for NDT Pipeline Services
+# WP7: One-Command Pipeline
+#
+# Usage:
+#   make pipeline-up     # Start harmonizer as background service
+#   make pipeline-down   # Stop harmonizer
+#   make pipeline-status # Check status and logs
+#
+# The harmonizer runs continuously, consuming from Kafka and writing to DB.
+# The exporter runs on-demand via `make exporter-run` (not managed by compose).
+
+networks:
+  clab-mgmt:
+    external: true  # Created by containerlab
+
+services:
+  harmonizer:
+    image: ndt/harmonizer:local
+    container_name: ndt-pipeline-harmonizer
+    restart: unless-stopped
+    networks:
+      - clab-mgmt
+    environment:
+      KAFKA_BROKERS: ${KAFKA_BROKERS:-bus-redpanda:9092}
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-wifi7.telemetry.v0_1}
+      KAFKA_GROUP: ${KAFKA_GROUP:-harmonizer-udm-v0}
+      AUTO_OFFSET_RESET: ${AUTO_OFFSET_RESET:-latest}
+      PG_HOST: ${PG_HOST:-udr-db}
+      PG_DB: ${PG_DB:-udr}
+      PG_USER: ${PG_USER:-udr}
+      PG_PASS: ${PG_PASS:-udr_pass}
+      BATCH_SIZE: ${BATCH_SIZE:-100}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # WP8: GCN Attack Detection Pipeline
+  # ============================================================================
+
+  windowizer:
+    image: ndt/windowizer:local
+    container_name: ndt-pipeline-windowizer
+    restart: unless-stopped
+    networks:
+      - clab-mgmt
+    environment:
+      KAFKA_BROKERS: ${KAFKA_BROKERS:-bus-redpanda:9092}
+      KAFKA_INPUT_TOPIC: ${KAFKA_TELEMETRY_TOPIC:-wifi7.telemetry.v0_1}
+      KAFKA_OUTPUT_TOPIC: ${KAFKA_WINDOWED_TOPIC:-wifi7.ml.windowed_features.v1}
+      KAFKA_GROUP: windowizer-gcn-v1
+      SEGMENT_LENGTH: ${WINDOWIZER_SEGMENT_LENGTH:-256}
+      WINDOW_INTERVAL_MS: ${WINDOWIZER_WINDOW_INTERVAL_MS:-100}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./security/detector/windowizer/config.yaml:/app/config.yaml:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - harmonizer
+
+  gcn-detector:
+    image: ndt/gcn-detector:local
+    container_name: ndt-pipeline-gcn-detector
+    restart: unless-stopped
+    networks:
+      - clab-mgmt
+    environment:
+      KAFKA_BROKERS: ${KAFKA_BROKERS:-bus-redpanda:9092}
+      KAFKA_INPUT_TOPIC: ${KAFKA_WINDOWED_TOPIC:-wifi7.ml.windowed_features.v1}
+      KAFKA_OUTPUT_TOPIC: ${KAFKA_PREDICTIONS_TOPIC:-wifi7.security.gcn_predictions.v1}
+      KAFKA_GROUP: gcn-detector-v1
+      PG_HOST: ${PG_HOST:-udr-db}
+      PG_DB: ${PG_DB:-udr}
+      PG_USER: ${PG_USER:-udr}
+      PG_PASS: ${PG_PASS:-udr_pass}
+      GCN_REGISTRY_PATH: /app/registry
+      GCN_ACTIVE_VERSION: ${GCN_ACTIVE_VERSION:-current}
+      GCN_DEVICE: ${GCN_DEVICE:-cpu}
+      GCN_BATCH_SIZE: ${GCN_BATCH_SIZE:-32}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./twin/registry/gcn:/app/registry:ro
+      - ./twin/gnn/detector/config.yaml:/app/config.yaml:ro
+    ports:
+      - "8080:8080"  # Health endpoint
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - windowizer
+    # Uncomment for GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]

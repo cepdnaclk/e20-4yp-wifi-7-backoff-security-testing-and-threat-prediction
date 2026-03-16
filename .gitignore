@@ -1,1 +1,73 @@
+# OS/editor
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Project artifacts (do not commit)
+sim/ns3/artifacts/
+experiments/results/
+*.pcap
+*.log
+
+# containerlab runtime artifacts (generated)
+clab/clab-*/ 
+clab/**/clab-*/ 
+**/.tls/
+**/topology-data.json
+
+# exporter runtime state
+.exporter_state/
+**/.exporter_state/
+
+# Local assistant/session state (do not commit)
+.claude/settings.local.json
+.claude/docs/context/current-session.md
+.claude/docs/context/archive/
+.claude/docs/WorkProcess/
+
+# Local Obsidian workspace state
+docs/codex/.obsidian/
+
+# Playwright CLI session artifacts (browser logs, page snapshots)
+.playwright-cli/
+
+# Playwright test output (reports, traces, screenshots, videos)
+test-results/
+tests/node_modules/
+tests/reports/
+tests/test-results/
+
+# Model training intermediates (keep best_model.pt, not checkpoints/logs)
+twin/registry/gcn/*/checkpoints/
+twin/registry/gcn/*/logs/
+
+# GNN training data (large — generated locally, not committed)
+twin/gnn/training_data/
+
+# Session screenshots (root-level PNGs)
+/*.png
+
+# Local backups
+backups/
+
 code/analysis/GNN/service/udr.sqlite

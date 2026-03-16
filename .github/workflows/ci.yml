@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  basic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate YAML
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import yaml
+          for p in pathlib.Path(".").rglob("*.yml"):
+              yaml.safe_load(p.read_text())
+          for p in pathlib.Path(".").rglob("*.yaml"):
+              yaml.safe_load(p.read_text())
+          print("YAML OK")
+          PY
