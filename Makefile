@@ -169,7 +169,7 @@ run-exp:
 #   make run-mlo-exp EXP_ID=... SCENARIO=normal|positive|negative
 # =============================================================================
 
-.PHONY: run-mlo-normal run-mlo-positive run-mlo-negative run-mlo-exp run-mlo-exp-stream
+.PHONY: run-mlo-normal run-mlo-positive run-mlo-negative run-mlo-exp run-mlo-exp-stream run-mlo-dynamic
 
 SEED       ?= 42
 SIM_TIME   ?= 50.0
@@ -191,6 +191,9 @@ run-mlo-normal:
 	  -e SIM_TIME="$(SIM_TIME)" \
 	  -e V3_COLLECT="$(V3_COLLECT)" \
 	  -e V3_DATA_DIR="/work/$(V3_DATA_DIR)" \
+	  -e V4_COLLECT="$(V4_COLLECT)" \
+	  -e V4_DATA_DIR="/work/$(V4_DATA_DIR)" \
+	  -e V4_TAG="$(V4_TAG)" \
 	  $(NS3_IMAGE) \
 	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) normal"
 
@@ -204,8 +207,12 @@ run-mlo-positive:
 	  -e NSTA="$(NSTA)" \
 	  -e SEED="$(SEED)" \
 	  -e SIM_TIME="$(SIM_TIME)" \
+	  -e BIAS="$(BIAS)" \
 	  -e V3_COLLECT="$(V3_COLLECT)" \
 	  -e V3_DATA_DIR="/work/$(V3_DATA_DIR)" \
+	  -e V4_COLLECT="$(V4_COLLECT)" \
+	  -e V4_DATA_DIR="/work/$(V4_DATA_DIR)" \
+	  -e V4_TAG="$(V4_TAG)" \
 	  $(NS3_IMAGE) \
 	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) positive"
 
@@ -219,8 +226,12 @@ run-mlo-negative:
 	  -e NSTA="$(NSTA)" \
 	  -e SEED="$(SEED)" \
 	  -e SIM_TIME="$(SIM_TIME)" \
+	  -e BIAS="$(BIAS)" \
 	  -e V3_COLLECT="$(V3_COLLECT)" \
 	  -e V3_DATA_DIR="/work/$(V3_DATA_DIR)" \
+	  -e V4_COLLECT="$(V4_COLLECT)" \
+	  -e V4_DATA_DIR="/work/$(V4_DATA_DIR)" \
+	  -e V4_TAG="$(V4_TAG)" \
 	  $(NS3_IMAGE) \
 	  bash -lc "/work/sim/ns3/scenario/run_mlo_scenario.sh $(EXP_ID) negative"
 
@@ -253,6 +264,26 @@ run-mlo-exp:
 	@echo "View results:"
 	@echo "  - Grafana: http://localhost:3000"
 	@echo "  - DB check: docker exec -it clab-ndt-wifi7-mlo-security-udr-db psql -U udr -d udr -c \"SELECT COUNT(*) FROM metrics WHERE experiment_id='$(EXP_ID)';\""
+
+# Run MLO dynamic scenario — bias changes mid-simulation according to PHASES schedule.
+# Usage:
+#   make run-mlo-dynamic EXP_ID=20260315-2200-mlo-dynamic-42 PHASES="0:0,20:5000,40:-5000,60:0"
+#   make run-mlo-dynamic EXP_ID=... PHASES="0:5000,40:0" SEED=99 SIM_TIME=80 NAP=2 NSTA=4
+run-mlo-dynamic:
+	@test -n "$(EXP_ID)" || (echo "EXP_ID required" && exit 1)
+	@test -n "$(PHASES)" || (echo "PHASES required. Example: PHASES='0:0,20:5000,40:-5000,60:0'" && exit 1)
+	@docker run --rm $(if $(INTERACTIVE),-it,) \
+	  --user "$$(id -u):$$(id -g)" \
+	  -v "$(CURDIR)":/work \
+	  -e NAP="$(NAP)" \
+	  -e NSTA="$(NSTA)" \
+	  -e SEED="$(SEED)" \
+	  -e SIM_TIME="$(SIM_TIME)" \
+	  -e V4_COLLECT="$(V4_COLLECT)" \
+	  -e V4_DATA_DIR="/work/$(V4_DATA_DIR)" \
+	  -e V4_TAG="$(V4_TAG)" \
+	  $(NS3_IMAGE) \
+	  bash -lc "/work/sim/ns3/scenario/run_mlo_dynamic.sh $(EXP_ID) '$(PHASES)'"
 
 # Stream-friendly MLO run: publish telemetry in segment-sized chunks to mimic live flow.
 run-mlo-exp-stream:
@@ -427,7 +458,9 @@ gcn-detector-health:
 # GCN Training Pipeline
 # =============================================================================
 
-.PHONY: gcn-trainer-build gcn-train gcn-train-v3 gcn-evaluate gcn-deploy
+.PHONY: gcn-trainer-build gcn-train gcn-train-v3 gcn-train-v4 gcn-collect-v4-static gcn-collect-v4-dynamic gcn-collect-v4 gcn-evaluate gcn-deploy
+
+V4_DATA_DIR ?= twin/gnn/training_data/v4
 
 GCN_TRAINER_IMAGE=ndt/gcn-trainer:local
 
@@ -462,6 +495,44 @@ gcn-train-v3:
 		--config /config/training_v3.yaml \
 		--data-root /data \
 		--output-dir /output
+
+gcn-train-v4:
+	@test -n "$(OUTPUT_DIR)" || (echo "OUTPUT_DIR required. Example: make gcn-train-v4 OUTPUT_DIR=twin/registry/gcn/v4.0.0" && exit 1)
+	@echo "Training GCN v4 (dynamic generalization, multi-AP, multi-segment-length)..."
+	@echo "Data:   $(V4_DATA_DIR)"
+	@echo "Output: $(OUTPUT_DIR)"
+	@mkdir -p $(CURDIR)/$(OUTPUT_DIR)
+	@docker run --rm --gpus all \
+		--user "$(shell id -u):$(shell id -g)" \
+		--entrypoint python \
+		-v $(CURDIR)/$(V4_DATA_DIR):/data:ro \
+		-v $(CURDIR)/$(OUTPUT_DIR):/output \
+		-v $(CURDIR)/twin/gnn/trainer/training_v4.yaml:/config/training_v4.yaml:ro \
+		$(GCN_TRAINER_IMAGE) \
+		-u run_training_v4.py \
+		--config /config/training_v4.yaml \
+		--data-root /data \
+		--output-dir /output
+
+SPLIT ?= train
+NCPU  ?= $(shell nproc)
+
+gcn-collect-v4-static:
+	@echo "Collecting GCN v4 static data (split=$(SPLIT), ncpu=$(NCPU))..."
+	@mkdir -p $(CURDIR)/$(V4_DATA_DIR)
+	@NCPU=$(NCPU) V4_DATA_DIR=$(CURDIR)/$(V4_DATA_DIR) \
+		bash sim/ns3/scenario/collect_v4_static_data.sh --split $(SPLIT)
+
+gcn-collect-v4-dynamic:
+	@echo "Collecting GCN v4 dynamic data (split=$(SPLIT), ncpu=$(NCPU))..."
+	@mkdir -p $(CURDIR)/$(V4_DATA_DIR)
+	@NCPU=$(NCPU) V4_DATA_DIR=$(CURDIR)/$(V4_DATA_DIR) \
+		bash sim/ns3/scenario/collect_v4_dynamic_data.sh --split $(SPLIT)
+
+gcn-collect-v4:
+	@echo "Collecting ALL GCN v4 data (split=$(SPLIT), ncpu=$(NCPU))..."
+	$(MAKE) gcn-collect-v4-static SPLIT=$(SPLIT) NCPU=$(NCPU)
+	$(MAKE) gcn-collect-v4-dynamic SPLIT=$(SPLIT) NCPU=$(NCPU)
 
 gcn-evaluate:
 	@test -n "$(MODEL)" || (echo "MODEL required. Example: make gcn-evaluate MODEL=v1.0.0" && exit 1)

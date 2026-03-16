@@ -1,0 +1,53 @@
+# GCN v4 Training Configuration — Dynamic Generalization
+# Separate from training_v3.yaml. v3 training code is NOT modified.
+# Train with: make gcn-train-v4 OUTPUT_DIR=twin/registry/gcn/v4.0.0
+#
+# Data:    twin/gnn/training_data/v4/train|val|test/Static+Dynamic
+# Biases:  attack train=±1000,±2000,±5000 | test=±500,±1000,±2000,±4000,±5000
+# Topology: nap1-4 only (nap5-6 too slow to generate)
+
+version: "4.0.0"
+
+# Model architecture — wider + deeper than v3 for dynamic generalization
+in_channels: 17           # Same 17 features as v3 (fully backward compatible)
+hidden_channels: 128      # Wider: 64 → 128
+num_layers: 3             # Deeper: 2 → 3
+dropout: 0.4              # Higher: 0.3 → 0.4 (regularise larger network)
+pooling: mean
+
+# Multi-length (same 4 lengths as v3, backward compatible)
+segment_lengths: [32, 64, 128, 256]
+segment_strides:
+  32: 32
+  64: 64
+  128: 128
+  256: 64    # sliding window to get more segments per long dynamic run
+
+# Dynamic labeling — attack-biased threshold:
+# A segment is Attack if > 30% of its windows have |bias| > 0.
+# Lower than 50% to increase sensitivity on transition and weak-attack segments.
+dynamic_label_threshold: 0.3
+
+# Preprocessing (same as v3)
+multi_ap_normalise: true
+use_derived_features: true
+use_class_weights: true
+
+# Training hyperparameters
+batch_size: 64            # 32 → 64 (stable gradients with larger dataset)
+learning_rate: 0.0005     # 0.001 → 0.0005 (wider network needs smaller LR)
+weight_decay: 0.0001
+max_epochs: 300           # 200 → 300 (larger dataset takes more epochs)
+patience: 30              # 20 → 30 (avoid premature early stopping)
+random_seed: 42
+
+# Split mode: folder-based (no random split — controlled by seed pools at generation)
+split_mode: folder
+test_size: 0.0
+val_size: 0.0
+
+# I/O (inside Docker container)
+data_root: /data
+checkpoint_dir: checkpoints_v4.0.0
+log_dir: logs_v4.0.0
+device: cuda

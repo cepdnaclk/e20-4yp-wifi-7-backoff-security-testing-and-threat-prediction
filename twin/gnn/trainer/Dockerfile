@@ -30,6 +30,7 @@ RUN pip install --no-cache-dir \
 # Copy GCN source from detector (training code lives there)
 COPY gcn_src/ /app/gcn_src/
 COPY run_training.py /app/run_training.py
+COPY run_training_v4.py /app/run_training_v4.py
 
-# Run training entrypoint
+# Default entrypoint (v3). Override with --entrypoint for v4.
 ENTRYPOINT ["python", "-u", "run_training.py"]

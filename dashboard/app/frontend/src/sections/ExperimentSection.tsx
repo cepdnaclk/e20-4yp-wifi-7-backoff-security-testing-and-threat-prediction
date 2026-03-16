@@ -9,6 +9,190 @@ import MetricLineChart from '../components/charts/MetricLineChart'
 import { useExperiments, useExperimentSummary, useExperimentPredictions, useMetricSeries } from '../hooks/useExperiments'
 import type { Experiment } from '../types/experiments'
 
+function expAP(id: string): string {
+  const m = id.match(/[_-](\d+)ap/i)
+  return m ? `${m[1]}AP` : ''
+}
+
+function expDuration(e: { first_ts: string | null; last_ts: string | null }): string {
+  if (!e.first_ts || !e.last_ts) return ''
+  const s = Math.round((new Date(e.last_ts).getTime() - new Date(e.first_ts).getTime()) / 1000)
+  return s > 0 ? `${s}s` : ''
+}
+
+function ExpMeta({ e }: { e: import('../types/experiments').Experiment }) {
+  const parts = [
+    expAP(e.experiment_id),
+    e.segment_count > 0 ? `${e.segment_count}seg` : null,
+    e.model_version ?? null,
+    expDuration(e),
+  ].filter(Boolean)
+  if (parts.length === 0) return null
+  return (
+    <span className="block text-xs font-normal mt-0.5 opacity-60 tracking-tight">
+      {parts.join(' · ')}
+    </span>
+  )
+}
+
+type ScenarioFilter = 'all' | 'normal' | 'positive' | 'negative'
+type ApFilter = 'all' | string   // e.g. '1AP', '2AP', …
+
+function expScenario(id: string): ScenarioFilter {
+  const l = id.toLowerCase()
+  if (l.includes('positive')) return 'positive'
+  if (l.includes('negative')) return 'negative'
+  if (l.includes('normal'))   return 'normal'
+  return 'all'
+}
+
+function filterExps(
+  list: import('../types/experiments').Experiment[],
+  scenario: ScenarioFilter,
+  ap: ApFilter,
+): import('../types/experiments').Experiment[] {
+  return list.filter(e => {
+    if (scenario !== 'all' && expScenario(e.experiment_id) !== scenario) return false
+    if (ap !== 'all' && expAP(e.experiment_id) !== ap) return false
+    return true
+  })
+}
+
+function FilterBar({
+  experiments,
+  scenario, setScenario,
+  ap, setAp,
+}: {
+  experiments: import('../types/experiments').Experiment[]
+  scenario: ScenarioFilter
+  setScenario: (v: ScenarioFilter) => void
+  ap: ApFilter
+  setAp: (v: ApFilter) => void
+}) {
+  const apOptions = useMemo(() => {
+    const seen = new Set<string>()
+    experiments.forEach(e => { const a = expAP(e.experiment_id); if (a) seen.add(a) })
+    return Array.from(seen).sort((a, b) => parseInt(a) - parseInt(b))
+  }, [experiments])
+
+  const scenarioBtns: { label: string; value: ScenarioFilter }[] = [
+    { label: 'All',      value: 'all'      },
+    { label: 'Normal',   value: 'normal'   },
+    { label: 'Positive', value: 'positive' },
+    { label: 'Negative', value: 'negative' },
+  ]
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-3">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {scenarioBtns.map(b => (
+          <button
+            key={b.value}
+            className={`neu-btn text-xs py-0.5 px-2 ${scenario === b.value ? 'neu-btn-primary' : ''}`}
+            onClick={() => setScenario(b.value)}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+      {apOptions.length > 1 && (
+        <>
+          <span className="text-xs opacity-20" style={{ color: 'var(--color-muted)' }}>|</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              className={`neu-btn text-xs py-0.5 px-2 ${ap === 'all' ? 'neu-btn-primary' : ''}`}
+              onClick={() => setAp('all')}
+            >
+              All AP
+            </button>
+            {apOptions.map(a => (
+              <button
+                key={a}
+                className={`neu-btn text-xs py-0.5 px-2 ${ap === a ? 'neu-btn-primary' : ''}`}
+                onClick={() => setAp(a)}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function PredTable({
+  predictions,
+  label,
+  accentColor,
+  selectedIdx,
+  onSelect,
+}: {
+  predictions: import('../types/experiments').Prediction[]
+  label?: string
+  accentColor?: string
+  selectedIdx?: number | null
+  onSelect?: (idx: number | null) => void
+}) {
+  return (
+    <div className="overflow-x-auto">
+      {label && (
+        <div className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: accentColor }}>
+          <span>●</span> {label}
+        </div>
+      )}
+      {onSelect && (
+        <div className="text-xs mb-2 opacity-50">Click a row to highlight it on the graph above</div>
+      )}
+      <table className="w-full text-sm">
+        <thead>
+          <tr>
+            {['#', 'Prediction', 'Confidence', 'Window', 'Inference (ms)'].map((h) => (
+              <th
+                key={h}
+                className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-wider"
+                style={{ color: 'var(--color-muted)', borderBottom: '1px solid rgba(166,180,200,0.3)' }}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {predictions.slice(0, 50).map((p, i) => {
+            const isSelected = selectedIdx === i
+            const rowColor = p.prediction === 1 ? 'rgba(232,93,106,' : 'rgba(72,187,120,'
+            return (
+              <tr
+                key={p.id}
+                onClick={() => onSelect?.(isSelected ? null : i)}
+                style={{
+                  borderBottom: '1px solid rgba(166,180,200,0.15)',
+                  background: isSelected
+                    ? `${rowColor}0.18)`
+                    : p.prediction === 1 ? `${rowColor}0.04)` : undefined,
+                  cursor: onSelect ? 'pointer' : undefined,
+                  outline: isSelected ? `1px solid ${rowColor}0.5)` : undefined,
+                }}
+              >
+                <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>{p.segment_number}</td>
+                <td className="py-2 px-3">
+                  <Badge variant={p.prediction === 1 ? 'attack' : 'normal'} label={p.prediction_label} />
+                </td>
+                <td className="py-2 px-3 font-semibold">{(p.confidence * 100).toFixed(1)}%</td>
+                <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>
+                  {p.window_start_idx}–{p.window_end_idx}
+                </td>
+                <td className="py-2 px-3 text-xs">{p.inference_time_ms?.toFixed(2) ?? '—'}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 const METRIC_OPTIONS = [
   'avg_backoff_slots', 'net_throughput_mbps', 'net_packet_loss_ratio',
   'net_avg_delay_ms',  'net_avg_jitter_ms',   'net_active_flows',
@@ -43,6 +227,7 @@ export default function ExperimentSection() {
   const [selectedMetric, setSelectedMetric] = useState('avg_backoff_slots')
   const [compareId, setCompareId] = useState<string | null>(null)
   const [compareMode, setCompareMode] = useState(false)
+  const [selectedPredIdx, setSelectedPredIdx] = useState<number | null>(null)
 
   // Date range filter — default: last 24h
   const [dateFrom, setDateFrom] = useState(() => {
@@ -75,13 +260,49 @@ export default function ExperimentSection() {
   )
   const { data: summary } = useExperimentSummary(activeId)
   const { data: preds } = useExperimentPredictions(activeId)
+  const { data: comparePreds } = useExperimentPredictions(compareMode ? compareId : null)
   const { data: series } = useMetricSeries(activeId, selectedMetric)
   const { data: compareSeries } = useMetricSeries(compareMode ? compareId : null, selectedMetric)
 
   const [showAllPrimary, setShowAllPrimary] = useState(false)
   const [showAllCompare, setShowAllCompare] = useState(false)
 
+  // Scenario + AP filters — independent for primary and compare pickers
+  const [primaryScenario, setPrimaryScenario] = useState<ScenarioFilter>('all')
+  const [primaryAp, setPrimaryAp] = useState<ApFilter>('all')
+  const [compareScenario, setCompareScenario] = useState<ScenarioFilter>('all')
+  const [compareAp, setCompareAp] = useState<ApFilter>('all')
+
+  // Build segment boundary marks from predictions (ts_start of each segment)
+  const segmentMarks = useMemo(() => {
+    if (!preds?.predictions?.length) return []
+    return preds.predictions.map((p, i) => ({
+      ts: p.ts_start ?? '',
+      color: p.prediction === 1 ? 'var(--color-attack)' : 'var(--color-normal)',
+      label: `${i + 1}`,
+    })).filter(m => m.ts)
+  }, [preds])
+
+  // Highlight for selected prediction row
+  const highlight = useMemo(() => {
+    if (selectedPredIdx === null || !preds?.predictions?.[selectedPredIdx]) return null
+    const p = preds.predictions[selectedPredIdx]
+    return {
+      tsStart: p.ts_start ?? '',
+      tsEnd: p.ts_end ?? '',
+      color: p.prediction === 1 ? 'var(--color-attack)' : 'var(--color-normal)',
+    }
+  }, [selectedPredIdx, preds])
+
   const experiments: Experiment[] = expList?.experiments || []
+  const primaryFiltered = useMemo(
+    () => filterExps(experiments, primaryScenario, primaryAp),
+    [experiments, primaryScenario, primaryAp],
+  )
+  const compareFiltered = useMemo(
+    () => filterExps(experiments.filter(e => e.experiment_id !== activeId), compareScenario, compareAp),
+    [experiments, activeId, compareScenario, compareAp],
+  )
 
   const primaryLabel = activeId ? activeId.split('-').slice(-3).join('-') : ''
   const compareLabel = compareId ? compareId.split('-').slice(-3).join('-') : ''
@@ -150,31 +371,42 @@ export default function ExperimentSection() {
 
         {expLoading && <LoadingSpinner message="Loading experiments…" />}
         {expError && <ErrorBanner message={expError} />}
+        <FilterBar
+          experiments={experiments}
+          scenario={primaryScenario} setScenario={setPrimaryScenario}
+          ap={primaryAp} setAp={setPrimaryAp}
+        />
         <div
           className="flex flex-wrap gap-2 overflow-hidden transition-all"
-          style={{ maxHeight: showAllPrimary ? 'none' : '66px' }}
+          style={{ maxHeight: showAllPrimary ? 'none' : '110px' }}
         >
-          {experiments.map((e) => (
+          {primaryFiltered.map((e) => (
             <button
               key={e.experiment_id}
-              className={`neu-btn text-xs ${activeId === e.experiment_id ? 'neu-btn-primary' : ''}`}
+              className={`neu-btn text-xs text-left ${activeId === e.experiment_id ? 'neu-btn-primary' : ''}`}
               onClick={() => setSelectedExperimentId(e.experiment_id)}
             >
-              {e.experiment_id.split('-').slice(-3).join('-')}
-              <Badge
-                variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
-                label={e.inferred_type}
-              />
+              <span className="flex items-center gap-1.5">
+                {e.experiment_id.split('-').slice(-3).join('-')}
+                <Badge
+                  variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
+                  label={e.inferred_type}
+                />
+              </span>
+              <ExpMeta e={e} />
             </button>
           ))}
+          {primaryFiltered.length === 0 && (
+            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>No experiments match the selected filters.</span>
+          )}
         </div>
-        {experiments.length > 0 && (
+        {primaryFiltered.length > 0 && (
           <button
             className="neu-btn text-xs py-0.5 px-2 mt-2 self-start"
             style={{ color: 'var(--color-brand)' }}
             onClick={() => setShowAllPrimary(v => !v)}
           >
-            {showAllPrimary ? 'See less ▲' : `See more (${experiments.length}) ▼`}
+            {showAllPrimary ? 'See less ▲' : `See more (${primaryFiltered.length}) ▼`}
           </button>
         )}
 
@@ -182,40 +414,44 @@ export default function ExperimentSection() {
         {compareMode && (
           <>
             <div className="section-title text-sm mt-4 mb-2">Compare With</div>
-            {(() => {
-              const compareList = experiments.filter(e => e.experiment_id !== activeId)
-              return (
-                <>
-                  <div
-                    className="flex flex-wrap gap-2 overflow-hidden transition-all"
-                    style={{ maxHeight: showAllCompare ? 'none' : '66px' }}
-                  >
-                    {compareList.map((e) => (
-                      <button
-                        key={e.experiment_id}
-                        className={`neu-btn text-xs ${compareId === e.experiment_id ? 'neu-btn-primary' : ''}`}
-                        onClick={() => setCompareId(id => id === e.experiment_id ? null : e.experiment_id)}
-                      >
-                        {e.experiment_id.split('-').slice(-3).join('-')}
-                        <Badge
-                          variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
-                          label={e.inferred_type}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                  {compareList.length > 0 && (
-                    <button
-                      className="neu-btn text-xs py-0.5 px-2 mt-2 self-start"
-                      style={{ color: 'var(--color-brand)' }}
-                      onClick={() => setShowAllCompare(v => !v)}
-                    >
-                      {showAllCompare ? 'See less ▲' : `See more (${compareList.length}) ▼`}
-                    </button>
-                  )}
-                </>
-              )
-            })()}
+            <FilterBar
+              experiments={experiments.filter(e => e.experiment_id !== activeId)}
+              scenario={compareScenario} setScenario={setCompareScenario}
+              ap={compareAp} setAp={setCompareAp}
+            />
+            <div
+              className="flex flex-wrap gap-2 overflow-hidden transition-all"
+              style={{ maxHeight: showAllCompare ? 'none' : '110px' }}
+            >
+              {compareFiltered.map((e) => (
+                <button
+                  key={e.experiment_id}
+                  className={`neu-btn text-xs text-left ${compareId === e.experiment_id ? 'neu-btn-primary' : ''}`}
+                  onClick={() => setCompareId(id => id === e.experiment_id ? null : e.experiment_id)}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {e.experiment_id.split('-').slice(-3).join('-')}
+                    <Badge
+                      variant={e.inferred_type === 'normal' ? 'normal' : e.inferred_type === 'attack' ? 'attack' : 'neutral'}
+                      label={e.inferred_type}
+                    />
+                  </span>
+                  <ExpMeta e={e} />
+                </button>
+              ))}
+              {compareFiltered.length === 0 && (
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>No experiments match the selected filters.</span>
+              )}
+            </div>
+            {compareFiltered.length > 0 && (
+              <button
+                className="neu-btn text-xs py-0.5 px-2 mt-2 self-start"
+                style={{ color: 'var(--color-brand)' }}
+                onClick={() => setShowAllCompare(v => !v)}
+              >
+                {showAllCompare ? 'See less ▲' : `See more (${compareFiltered.length}) ▼`}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -279,49 +515,35 @@ export default function ExperimentSection() {
                 height={220}
                 compareData={compareMode && compareSeries ? compareSeries.points : undefined}
                 compareName={compareMode && compareId ? compareLabel : undefined}
+                segmentMarks={segmentMarks}
+                highlight={highlight}
               />
             ) : (
               <LoadingSpinner />
             )}
           </div>
 
-          {/* Predictions table */}
+          {/* Predictions table — single or side-by-side in compare mode */}
           {preds && preds.predictions.length > 0 && (
             <div className="neu-card overflow-hidden">
               <div className="section-title text-base mb-3">Segment Predictions</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr>
-                      {['#', 'Prediction', 'Confidence', 'Window', 'Inference (ms)'].map((h) => (
-                        <th key={h} className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)', borderBottom: '1px solid rgba(166,180,200,0.3)' }}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preds.predictions.slice(0, 50).map((p) => (
-                      <tr
-                        key={p.id}
-                        style={{
-                          borderBottom: '1px solid rgba(166,180,200,0.15)',
-                          background: p.prediction === 1 ? 'rgba(232,93,106,0.04)' : undefined,
-                        }}
-                      >
-                        <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>{p.segment_number}</td>
-                        <td className="py-2 px-3">
-                          <Badge variant={p.prediction === 1 ? 'attack' : 'normal'} label={p.prediction_label} />
-                        </td>
-                        <td className="py-2 px-3 font-semibold">{(p.confidence * 100).toFixed(1)}%</td>
-                        <td className="py-2 px-3 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {p.window_start_idx}–{p.window_end_idx}
-                        </td>
-                        <td className="py-2 px-3 text-xs">{p.inference_time_ms?.toFixed(2) ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className={compareMode && compareId && comparePreds ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : ''}>
+                {/* Primary */}
+                <PredTable
+                  predictions={preds.predictions}
+                  label={compareMode && compareId ? primaryLabel : undefined}
+                  accentColor={compareMode && compareId ? (METRIC_COLORS[selectedMetric] || 'var(--color-brand)') : undefined}
+                  selectedIdx={selectedPredIdx}
+                  onSelect={setSelectedPredIdx}
+                />
+                {/* Compare */}
+                {compareMode && compareId && comparePreds && comparePreds.predictions.length > 0 && (
+                  <PredTable
+                    predictions={comparePreds.predictions}
+                    label={compareLabel}
+                    accentColor="#06b6d4"
+                  />
+                )}
               </div>
             </div>
           )}
